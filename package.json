@@ -1,0 +1,151 @@
+{
+  "name": "codabra",
+  "displayName": "Codabra",
+  "description": "A simple, clean AI coding assistant",
+  "version": "1.0.0",
+  "publisher": "GeneralIntelligenceLTD",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:codabra-sidebar"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codabra.startChat",
+        "title": "Codabra: Start New Chat",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codabra.viewPastChats",
+        "title": "Codabra: View Past Chats",
+        "icon": "$(history)"
+      },
+      {
+        "command": "codabra.deleteChat",
+        "title": "Delete Chat",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "codabra.openSettings",
+        "title": "Codabra: Settings",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "codabra.showCurrentChat",
+        "title": "Codabra: Show Current Chat",
+        "icon": "$(comment-discussion)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codabra.showCurrentChat",
+          "when": "view == codabra-view && (activeWebviewPanelId == 'history-view' || activeWebviewPanelId == 'settings-view')",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codabra.startChat",
+          "when": "view == codabra-view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codabra.viewPastChats",
+          "when": "view == codabra-view",
+          "group": "navigation@3"
+        },
+        {
+          "command": "codabra.openSettings",
+          "when": "view == codabra-view",
+          "group": "navigation@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "codabra.startChat"
+        },
+        {
+          "command": "codabra.viewPastChats"
+        },
+        {
+          "command": "codabra.deleteChat",
+          "when": "false"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codabra-sidebar",
+          "title": "Codabra",
+          "icon": "$(comment)"
+        }
+      ]
+    },
+    "views": {
+      "codabra-sidebar": [
+        {
+          "id": "codabra-view",
+          "name": "Chat",
+          "type": "webview",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "codabra.startChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      }
+    ],
+    "configuration": {
+      "title": "Codabra",
+      "properties": {
+        "codabra.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic API Key"
+        },
+        "codabra.extendedThinking": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Sonnet 3.7 extended thinking mode"
+        },
+        "codabra.systemPrompt": {
+          "type": "string",
+          "default": "You are an expert software developer assistant with deep knowledge across programming languages, frameworks, and best practices. When helping with code:\n\n1. Prioritize clean, maintainable, and efficient solutions over quick hacks\n2. Include helpful comments explaining complex sections\n3. Explicitly address error handling and edge cases\n4. Follow modern best practices for the language/framework in question\n5. When explaining code, break down complex concepts step-by-step\n6. Suggest testing approaches when appropriate\n7. Point out potential performance issues or security concerns\n\nBefore providing solutions, ensure you fully understand the requirements and context. Ask clarifying questions when needed.",
+          "description": "System prompt for the Anthropic Claude model",
+          "editPresentation": "multilineText"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/highlight.js": "^10.1.0",
+    "@types/marked": "^5.0.1",
+    "@types/node": "^22.14.1",
+    "@types/vscode": "^1.99.1",
+    "typescript": "^5.8.3",
+    "vscode-test": "^1.6.1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@vscode/vsce": "^3.3.2",
+    "highlight.js": "^11.8.0",
+    "marked": "^9.1.0"
+  }
+}
