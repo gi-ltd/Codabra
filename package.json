@@ -1,8 +1,8 @@
 {
   "name": "codabra",
-  "displayName": "Codabra",
+  "displayName": "Codabra (Preview)",
   "description": "A simple, clean AI coding assistant",
-  "version": "1.0.0-preview",
+  "version": "1.0.0",
   "publisher": "GeneralIntelligenceLTD",
   "license": "MIT",
   "icon": "icon.png",
@@ -16,6 +16,7 @@
   },
   "keywords": [
     "ai",
+    "sonnet",
     "claude",
     "anthropic",
     "coding assistant",
