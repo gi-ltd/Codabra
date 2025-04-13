@@ -2,13 +2,29 @@
   "name": "codabra",
   "displayName": "Codabra",
   "description": "A simple, clean AI coding assistant",
-  "version": "1.0.0",
+  "version": "1.0.0-preview",
   "publisher": "GeneralIntelligenceLTD",
+  "license": "MIT",
+  "icon": "icon.png",
+  "preview": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/random-dev0/Codabra.git"
+  },
   "engines": {
     "vscode": "^1.99.0"
   },
+  "keywords": [
+    "ai",
+    "claude",
+    "anthropic",
+    "coding assistant",
+    "chat"
+  ],
   "categories": [
-    "Other"
+    "Other",
+    "Programming Languages",
+    "Machine Learning"
   ],
   "activationEvents": [
     "onView:codabra-sidebar"

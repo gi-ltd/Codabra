@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codabra Icon</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        .instructions {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        ol {
+            text-align: left;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Chat bubble with code brackets - VSCode style monochromatic icon -->
+            <path fill-rule="evenodd" clip-rule="evenodd"
+                d="M64 16C37.49 16 16 37.49 16 64C16 90.51 37.49 112 64 112C70.6274 112 76.9487 110.558 82.6641 108H96C101.523 108 106 103.523 106 98V82.6641C108.558 76.9487 110 70.6274 110 64C110 37.49 88.51 16 64 16ZM64 24C84.9868 24 102 41.0132 102 64C102 69.2223 100.957 74.1826 99.0762 78.6641L98 80.8359V98C98 99.1046 97.1046 100 96 100H80.8359L78.6641 99.0762C74.1826 100.957 69.2223 102 64 102C45.0132 102 28 84.9868 28 64C28 41.0132 45.0132 24 64 24Z"
+                fill="#424242" />
+
+            <!-- Code brackets inside chat bubble -->
+            <path d="M52 48L40 64L52 80" stroke="#424242" stroke-width="6" stroke-linecap="round"
+                stroke-linejoin="round" />
+            <path d="M76 48L88 64L76 80" stroke="#424242" stroke-width="6" stroke-linecap="round"
+                stroke-linejoin="round" />
+            <path d="M68 44L60 84" stroke="#424242" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+        <div class="instructions">
+            <h1>Codabra Icon</h1>
+            <p>To save this icon for your VSCode extension:</p>
+            <ol>
+                <li>Right-click on the icon above and select "Save image as..."</li>
+                <li>Save it as "icon.png" in your extension's root directory</li>
+                <li>If your browser doesn't support saving SVG as PNG directly, you can:</li>
+                <ul>
+                    <li>Take a screenshot of the icon (ensure it's 128x128 pixels)</li>
+                    <li>Use an online SVG to PNG converter</li>
+                    <li>Open this HTML file in a browser, then use a screen capture tool</li>
+                </ul>
+                <li>Verify that the icon.png file is in the root directory of your extension</li>
+            </ol>
+        </div>
+    </div>
+</body>
+
+</html>
