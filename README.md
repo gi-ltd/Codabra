@@ -75,4 +75,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Support
 
-If you encounter any issues or have questions, please open an issue on the [GitHub repository](https://github.com/random-dev0/Codabra).
+If you encounter any issues or have questions, please open an issue on the [GitHub repository](https://github.com/gi-ltd/Codabra).

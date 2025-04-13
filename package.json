@@ -9,7 +9,7 @@
   "preview": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/random-dev0/Codabra.git"
+    "url": "https://github.com/gi-ltd/Codabra.git"
   },
   "engines": {
     "vscode": "^1.99.0"
