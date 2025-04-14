@@ -279,14 +279,7 @@ body {
     border: 2px solid var(--vscode-editor-foreground);
     border-radius: 50%;
     border-top-color: transparent;
-    animation: spin 1s linear infinite;
     margin-right: 10px;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 .settings-container,
@@ -307,16 +300,29 @@ body {
     border-radius: 5px;
     background-color: var(--vscode-editor-inactiveSelectionBackground);
     cursor: pointer;
-    transition: background-color 0.2s;
+    position: relative;
 }
 
 .past-chat-item:hover {
     background-color: var(--vscode-list-hoverBackground);
 }
 
+.chat-title {
+    font-weight: bold;
+}
+
+.chat-date {
+    font-size: 0.8em;
+    color: var(--vscode-descriptionForeground);
+}
+
 .delete-icon {
     opacity: 0.6;
-    transition: opacity 0.2s ease;
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    cursor: pointer;
 }
 
 .delete-icon:hover {
@@ -361,6 +367,56 @@ body {
     background-color: var(--vscode-button-hoverBackground);
 }
 
+#chat-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+#history-view {
+    display: none;
+    padding: 20px;
+}
+
+#history-view h2 {
+    margin-bottom: 20px;
+}
+
+.loading-message {
+    padding: 20px;
+    color: #666;
+}
+
+.save-button-container {
+    display: flex;
+    justify-content: flex-start;
+}
+
+textarea#system-prompt {
+    resize: vertical;
+}
+
+.startup-message {
+    padding: 20px;
+    color: #666;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.startup-message svg {
+    margin-bottom: 15px;
+    color: #666;
+}
+
 .hidden {
     display: none;
 }
@@ -389,7 +445,6 @@ body {
     height: 100%;
     background-color: var(--vscode-progressBar-background);
     border-radius: 2px;
-    transition: width 0.3s ease;
 }
 
 /* Toggle Switch Styles */
@@ -415,7 +470,6 @@ body {
     bottom: 0;
     background-color: var(--vscode-input-background);
     border: 1px solid var(--vscode-input-border);
-    transition: .4s;
     border-radius: 24px;
 }
 
@@ -427,7 +481,6 @@ body {
     left: 4px;
     bottom: 3px;
     background-color: var(--vscode-foreground);
-    transition: .4s;
     border-radius: 50%;
 }
 

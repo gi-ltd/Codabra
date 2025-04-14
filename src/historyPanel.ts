@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Chat } from './apiService';
+import { handleError } from './utils/errorHandler';
 
 export class ChatTreeItem extends vscode.TreeItem {
 
@@ -35,7 +36,8 @@ export class HistoryPanel implements vscode.TreeDataProvider<ChatTreeItem> {
         await this.storage.update('codabra-chats', this.storage.get<Chat[]>('codabra-chats', []).filter(chat => chat.id !== item.chat.id));
         this.refresh();
       } catch (error) {
-        vscode.window.showErrorMessage(`Failed to delete chat: ${error instanceof Error ? error.message : String(error)}`);
+        // Use standardized error handling
+        handleError(error, 'deleting chat');
       }
     });
   }

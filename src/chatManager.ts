@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { APIService, ChatMessage } from './apiService';
 import { WebviewManager } from './webviewManager';
+import { LockManager } from './utils/lockManager';
+import { EventManager } from './utils/eventManager';
+import { handleError } from './utils/errorHandler';
 
 /**
  * Manages chat operations including creating, loading, and sending messages
@@ -8,6 +11,7 @@ import { WebviewManager } from './webviewManager';
 export class ChatManager {
   private _currentChatId?: string;
   private _isHandlingMessage = false;
+  private _isStreaming = false;
 
   constructor(
     private readonly _apiService: APIService,
@@ -15,10 +19,16 @@ export class ChatManager {
   ) {
     // Listen for changes to chats
     this._apiService.onDidChangeChats(() => {
-      if (this._currentChatId && this._webviewManager.view && !this._isHandlingMessage) {
-        // Only reload the chat if we're not currently handling a message
-        // This prevents duplicate messages when sending/receiving
-        this.loadChat(this._currentChatId);
+      if (this._currentChatId && this._webviewManager.view) {
+        if (this._isHandlingMessage && this._isStreaming) {
+          // During streaming, we want to update the UI with the latest content
+          // but we don't want to reload the entire chat
+          this.updateStreamingContent();
+        } else if (!this._isHandlingMessage) {
+          // Only reload the chat if we're not currently handling a message
+          // This prevents duplicate messages when sending/receiving
+          this.loadChat(this._currentChatId);
+        }
       }
     });
   }
@@ -38,39 +48,46 @@ export class ChatManager {
       return;
     }
 
-    try {
-      // Set flag to prevent duplicate loading during chat loading
-      this._isHandlingMessage = true;
+    // Use LockManager to prevent race conditions
+    await LockManager.executeWithLock(`chat-load-${chatId}`, async () => {
+      try {
+        // Set flag to prevent duplicate loading during chat loading
+        this._isHandlingMessage = true;
 
-      const chat = await this._apiService.getChat(chatId);
+        const chat = await this._apiService.getChat(chatId);
 
-      if (chat) {
-        this._currentChatId = chatId;
+        if (chat) {
+          this._currentChatId = chatId;
 
-        // Update context to indicate we have a current chat
-        await vscode.commands.executeCommand('setContext', 'codabra.hasCurrentChat', true);
+          // Update context to indicate we have a current chat
+          EventManager.setVSCodeContext('codabra.hasCurrentChat', true);
 
-        this._webviewManager.postMessage({ command: 'loadChat', chat: chat });
+          this._webviewManager.postMessage({ command: 'loadChat', chat: chat });
 
-        // Update context usage after loading a chat using the Anthropic SDK's token counting
-        this._apiService.countTokens(chatId).then(tokens => {
-          if (tokens) {
-            this.updateContextUsage(tokens);
-          }
-        });
-      } else {
-        // If the chat doesn't exist, clear the current chat ID and show past chats
-        this._currentChatId = undefined;
+          // Update context usage after loading a chat using the Anthropic SDK's token counting
+          this._apiService.countTokens(chatId).then(tokens => {
+            if (tokens) {
+              this.updateContextUsage(tokens);
+            }
+          }).catch(error => handleError(error, 'counting tokens', false));
+        } else {
+          // If the chat doesn't exist, clear the current chat ID and show past chats
+          this._currentChatId = undefined;
 
-        // Update context to indicate we don't have a current chat
-        await vscode.commands.executeCommand('setContext', 'codabra.hasCurrentChat', false);
+          // Update context to indicate we don't have a current chat
+          EventManager.setVSCodeContext('codabra.hasCurrentChat', false);
 
-        this.showPastChats();
+          this.showPastChats();
+        }
+      } catch (error) {
+        handleError(error, 'loading chat');
+      } finally {
+        // Reset flag when done
+        this._isHandlingMessage = false;
       }
-    } finally {
-      // Reset flag when done
-      this._isHandlingMessage = false;
-    }
+    });
+
+    return;
   }
 
   /**
@@ -81,27 +98,34 @@ export class ChatManager {
       return;
     }
 
-    try {
-      // Set flag to prevent duplicate loading during chat creation
-      this._isHandlingMessage = true;
+    // Use LockManager to prevent race conditions
+    await LockManager.executeWithLock('chat-create', async () => {
+      try {
+        // Set flag to prevent duplicate loading during chat creation
+        this._isHandlingMessage = true;
 
-      const chat = await this._apiService.createChat();
-      this._currentChatId = chat.id;
+        const chat = await this._apiService.createChat();
+        this._currentChatId = chat.id;
 
-      // Update context to indicate we have a current chat
-      await vscode.commands.executeCommand('setContext', 'codabra.hasCurrentChat', true);
+        // Update context to indicate we have a current chat
+        EventManager.setVSCodeContext('codabra.hasCurrentChat', true);
 
-      this._webviewManager.postMessage({ command: 'loadChat', chat: chat });
+        this._webviewManager.postMessage({ command: 'loadChat', chat: chat });
 
-      // Reset context usage when creating a new chat
-      this.updateContextUsage(0);
+        // Reset context usage when creating a new chat
+        this.updateContextUsage(0);
 
-      // Focus the chat view
-      vscode.commands.executeCommand('codabra-view.focus');
-    } finally {
-      // Reset flag when done
-      this._isHandlingMessage = false;
-    }
+        // Focus the chat view
+        vscode.commands.executeCommand('codabra-view.focus');
+      } catch (error) {
+        handleError(error, 'creating new chat');
+      } finally {
+        // Reset flag when done
+        this._isHandlingMessage = false;
+      }
+    });
+
+    return;
   }
 
   /**
@@ -112,74 +136,108 @@ export class ChatManager {
       return;
     }
 
-    try {
-      // Set flag to prevent duplicate loading during message handling
-      this._isHandlingMessage = true;
+    // Use LockManager to prevent race conditions
+    await LockManager.executeWithLock('chat-send-message', async () => {
+      try {
+        // Set flag to prevent duplicate loading during message handling
+        this._isHandlingMessage = true;
 
-      // Ensure we have a valid chat to send the message to
-      if (!this._currentChatId || !(await this._apiService.chatExists(this._currentChatId))) {
-        const chat = await this._apiService.createChat();
-        this._currentChatId = chat.id;
-      }
-
-      // Get context from active editor if available
-      let context: string | undefined;
-      const activeEditor = vscode.window.activeTextEditor;
-      if (activeEditor) {
-        context = activeEditor.selection.isEmpty
-          ? `File: ${activeEditor.document.fileName}, Language: ${activeEditor.document.languageId}`
-          : activeEditor.document.getText(activeEditor.selection);
-      }
-
-      // Update UI to show user message and start streaming state
-      this._webviewManager.postMessage({ command: 'addUserMessage', message: text });
-      this._webviewManager.postMessage({ command: 'startStreaming' });
-
-      // Set up a listener for chat updates during streaming
-      const chatUpdateListener = this._apiService.onDidChangeChats(() => {
-        // Only process updates if we're still in streaming mode
-        if (this._isHandlingMessage && this._currentChatId) {
-          this._apiService.getChat(this._currentChatId).then(chat => {
-            if (chat && chat.messages.length > 0) {
-              // Find the last assistant message that's being generated
-              // It might not be the last message in the chat yet
-              for (let i = chat.messages.length - 1; i >= 0; i--) {
-                const msg = chat.messages[i];
-                if (msg.role === 'assistant') {
-                  // Send the update to the UI
-                  this._webviewManager.postMessage({
-                    command: 'updateStreamingContent',
-                    content: msg.content
-                  });
-                  break;
-                }
-              }
-            }
-          });
+        // Ensure we have a valid chat to send the message to
+        if (!this._currentChatId || !(await this._apiService.chatExists(this._currentChatId))) {
+          const chat = await this._apiService.createChat();
+          this._currentChatId = chat.id;
         }
-      });
 
-      // Send the message and get response
-      const response = await this._apiService.sendMessage(this._currentChatId, text, context);
+        // Get context from active editor if available
+        let context: string | undefined;
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+          context = activeEditor.selection.isEmpty
+            ? `File: ${activeEditor.document.fileName}, Language: ${activeEditor.document.languageId}`
+            : activeEditor.document.getText(activeEditor.selection);
+        }
 
-      // Remove the listener after streaming is complete
-      chatUpdateListener.dispose();
+        // Update UI to show user message and start streaming state
+        this._webviewManager.postMessage({ command: 'addUserMessage', message: text });
+        this._webviewManager.postMessage({ command: 'startStreaming' });
 
-      this._webviewManager.postMessage({ command: 'endStreaming' });
+        // Set streaming flag
+        this._isStreaming = true;
 
-      if (response) {
-        this._webviewManager.postMessage({ command: 'addAssistantMessage', message: response.content });
+        try {
+          // Send the message and get response
+          const response = await this._apiService.sendMessage(this._currentChatId, text, context);
 
-        // Update context usage based on the current chat using the Anthropic SDK's token counting
-        this._apiService.countTokens(this._currentChatId).then(tokens => {
-          if (tokens) {
-            this.updateContextUsage(tokens);
+          if (response) {
+            // First end streaming UI state to remove the streaming message element
+            this._webviewManager.postMessage({ command: 'endStreaming' });
+
+            // Then add the final message
+            this._webviewManager.postMessage({ command: 'addAssistantMessage', message: response.content });
+
+            // Update context usage based on the current chat using the Anthropic SDK's token counting
+            try {
+              const tokens = await this._apiService.countTokens(this._currentChatId);
+              if (tokens) {
+                this.updateContextUsage(tokens);
+              }
+            } catch (error) {
+              handleError(error, 'counting tokens', false);
+            }
           }
-        });
+        } catch (error) {
+          handleError(error, 'sending message');
+
+          // End streaming UI state in case of error
+          this._webviewManager.postMessage({ command: 'endStreaming' });
+        } finally {
+          // Reset streaming flag
+          this._isStreaming = false;
+
+          // Reset flag when done, regardless of success or failure
+          this._isHandlingMessage = false;
+        }
+      } catch (error) {
+        // Handle any errors that occur during setup
+        handleError(error, 'setting up message sending');
+
+        // Reset flags and end streaming UI state
+        this._isStreaming = false;
+        this._isHandlingMessage = false;
+        this._webviewManager.postMessage({ command: 'endStreaming' });
       }
-    } finally {
-      // Reset flag when done, regardless of success or failure
-      this._isHandlingMessage = false;
+    });
+
+    return;
+  }
+
+  /**
+   * Updates the streaming content in the UI
+   * This is called when a chat update is received during streaming
+   */
+  private async updateStreamingContent(): Promise<void> {
+    if (!this._currentChatId || !this._isStreaming || !this._webviewManager.view) {
+      return;
+    }
+
+    try {
+      const chat = await this._apiService.getChat(this._currentChatId);
+      if (chat && chat.messages.length > 0) {
+        // Find the last assistant message that's being generated
+        for (let i = chat.messages.length - 1; i >= 0; i--) {
+          const msg = chat.messages[i];
+          if (msg.role === 'assistant') {
+            // Send the update to the UI
+            this._webviewManager.postMessage({
+              command: 'updateStreamingContent',
+              content: msg.content
+            });
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating streaming content:', error);
     }
   }
 
@@ -241,6 +299,34 @@ export class ChatManager {
 
     await this._apiService.deleteChat(chatId);
     this.showPastChats(); // Refresh the past chats view
+  }
+
+  /**
+   * Cancels the current streaming response
+   */
+  public cancelStreaming(): void {
+    if (!this._currentChatId || !this._isStreaming) {
+      return;
+    }
+
+    // Cancel the API request
+    const cancelled = this._apiService.cancelRequest(this._currentChatId);
+
+    if (cancelled) {
+      console.log(`Cancelled streaming for chat ${this._currentChatId}`);
+
+      // Update the UI to show the cancellation
+      this._webviewManager.postMessage({
+        command: 'endStreaming',
+        cancelled: true
+      });
+
+      // Load the chat to show the cancelled message
+      this.loadChat(this._currentChatId);
+    }
+
+    // Reset streaming flag
+    this._isStreaming = false;
   }
 
   /**

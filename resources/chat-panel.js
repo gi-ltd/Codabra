@@ -197,9 +197,12 @@
 
                 // Add event listener to cancel button
                 cancelButton.onclick = function () {
-                    // TODO: Implement cancellation logic when backend supports it
-                    // For now, just end streaming UI state
+                    // Send cancellation request to the backend
                     vscode.postMessage({ command: 'cancelStreaming' });
+
+                    // Disable the cancel button to prevent multiple cancellations
+                    cancelButton.disabled = true;
+                    cancelButton.style.opacity = '0.5';
                 };
                 break;
 
@@ -214,12 +217,21 @@
                 messageInput.style.opacity = '1';
                 sendButton.disabled = false;
                 sendButton.style.opacity = '1';
+                cancelButton.disabled = false;
+                cancelButton.style.opacity = '1';
                 cancelButton.style.display = 'none';
 
                 // Remove streaming message element (it will be replaced by the final message)
                 const streamingElement = document.getElementById('streaming-message');
                 if (streamingElement) {
-                    streamingElement.remove();
+                    // If the message was cancelled, we'll keep the partial content
+                    // and add a cancellation note in the UI
+                    if (event.data.cancelled) {
+                        // The cancelled message will be loaded via loadChat
+                        streamingElement.remove();
+                    } else {
+                        streamingElement.remove();
+                    }
                 }
                 break;
 
@@ -269,17 +281,10 @@
 
                         const chatElement = document.createElement('div');
                         chatElement.className = 'past-chat-item';
-                        chatElement.style.padding = '10px';
-                        chatElement.style.margin = '5px 0';
-                        chatElement.style.borderRadius = '5px';
-                        chatElement.style.backgroundColor = 'var(--vscode-editor-inactiveSelectionBackground)';
-                        chatElement.style.cursor = 'pointer';
-                        chatElement.style.position = 'relative'; // Add position relative for absolute positioning of delete icon
-
                         chatElement.innerHTML = `
-                            <div style="font-weight: bold;">${chat.title}</div>
-                            <div style="font-size: 0.8em; color: var(--vscode-descriptionForeground);">${new Date(chat.updatedAt).toLocaleString()}</div>
-                            <div class="delete-icon" title="Delete chat" style="position: absolute; top: 50%; right: 10px; transform: translateY(-50%); cursor: pointer;">
+                            <div class="chat-title">${chat.title}</div>
+                            <div class="chat-date">${new Date(chat.updatedAt).toLocaleString()}</div>
+                            <div class="delete-icon" title="Delete chat">
                                 <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
                                 <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3h3v1h-1v9l-1 1H4l-1-1V4H2V3h3V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1zM9 2H6v1h3V2zM4 13h7V4H4v9zm2-8H5v7h1V5zm1 0h1v7H7V5zm2 0h1v7H9V5z"/>
                                 </svg>
@@ -330,7 +335,7 @@
                         pastChatsList.appendChild(chatElement);
                     });
                 } else
-                    pastChatsList.innerHTML = '<div style="padding: 20px; color: #666;">No past chats found.</div>';
+                    pastChatsList.innerHTML = '<div class="loading-message">No past chats found.</div>';
                 break;
         }
 
@@ -344,15 +349,21 @@
 
     // Function to show startup message if chat is empty
     function showStartupMessageIfEmpty() {
-        if (chatContainer.querySelectorAll('.message').length === 0)
-            chatContainer.innerHTML = `
-                <div id="startup-message" style="padding: 20px; color: #666; text-align: center; display: flex; flex-direction: column; align-items: center;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 15px; color: #666;">
+        if (chatContainer.querySelectorAll('.message').length === 0) {
+            const startupMessage = document.createElement('div');
+            startupMessage.id = 'startup-message';
+            startupMessage.className = 'startup-message';
+
+            startupMessage.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                 </svg>
-                Speak mortal.
-                </div>
+                <span>Type your message to start a conversation.</span>
             `;
+
+            chatContainer.innerHTML = '';
+            chatContainer.appendChild(startupMessage);
+        }
     }
 
     // Modify addMessage to remove startup message before adding new messages

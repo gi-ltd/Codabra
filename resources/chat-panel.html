@@ -9,20 +9,18 @@
   <title>Codabra</title>
   <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/default.min.css">
-  <!-- The CSS will be injected by the extension -->
   <style id="vscode-css-styles"></style>
 </head>
 
 <body>
-  <div id="chat-view" style="display: flex; flex-direction: column; height: 100%;">
+  <div id="chat-view">
     <div id="context-usage" class="context-usage">
       <div class="context-usage-label">Context: <span id="context-usage-text">0 / 200K tokens (0%)</span></div>
       <div class="context-usage-bar-container">
-        <div id="context-usage-bar" class="context-usage-bar" style="width: 0%;"></div>
+        <div id="context-usage-bar" class="context-usage-bar"></div>
       </div>
     </div>
-    <div id="chat-container" class="chat-container"
-      style="flex: 1; display: flex; flex-direction: column; justify-content: center;"></div>
+    <div id="chat-container" class="chat-container"></div>
 
     <div id="loading" class="loading hidden">
       <div class="loading-spinner"></div>
@@ -41,11 +39,10 @@
     </div>
   </div>
 
-  <div id="history-view" class="past-chats-container" style="display: none; padding: 20px;">
-    <h2 style="margin-bottom: 20px;">Past Chats</h2>
+  <div id="history-view" class="past-chats-container">
+    <h2>Past Chats</h2>
     <div id="history-list" class="history-list">
-      <!-- Past chats will be loaded here -->
-      <div style="padding: 20px; color: #666;">Loading past chats...</div>
+      <div class="loading-message">Loading past chats...</div>
     </div>
   </div>
 
@@ -65,17 +62,16 @@
 
     <div class="settings-group">
       <label class="settings-label" for="system-prompt">System Prompt</label>
-      <textarea id="system-prompt" class="settings-input" rows="10" style="resize: vertical;"></textarea>
+      <textarea id="system-prompt" class="settings-input" rows="10"></textarea>
     </div>
 
-    <div class="settings-group" style="display: flex; justify-content: flex-start;">
+    <div class="settings-group save-button-container">
       <button id="save-settings-button" class="settings-button">Save</button>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/highlight.min.js"></script>
-  <!-- The JavaScript will be injected by the extension -->
   <script id="vscode-js-script"></script>
 </body>
 

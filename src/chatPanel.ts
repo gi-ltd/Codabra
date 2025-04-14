@@ -83,10 +83,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
           await this._chatManager.deleteChat(message.chatId);
           break;
         case 'cancelStreaming':
-          // Handle cancel streaming request
-          // For now, just end the streaming state in the UI
-          // In the future, this could abort the actual API request
-          this._webviewManager.postMessage({ command: 'endStreaming' });
+          // Cancel the streaming request in the API
+          this._chatManager.cancelStreaming();
+          // The UI streaming state will be ended by the ChatManager
           break;
         case 'setContext':
           await vscode.commands.executeCommand('setContext', message.key, message.value);

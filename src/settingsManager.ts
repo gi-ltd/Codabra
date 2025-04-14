@@ -66,7 +66,7 @@ export class SettingsManager {
         );
 
         // Reinitialize the Anthropic client with the new API key
-        this._apiService['initializeAnthropicClient']();
+        this._apiService.initializeAnthropicClient();
 
         vscode.window.showInformationMessage('Codabra settings saved');
     }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import Anthropic from '@anthropic-ai/sdk';
 import { HistoryPanel } from './historyPanel';
+import { handleError, ErrorType } from './utils/errorHandler';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -27,6 +28,11 @@ export class APIService {
 
   // Cache for token counts to avoid unnecessary API calls
   private tokenCountCache: Map<string, number> = new Map();
+  // Maximum number of entries in the token count cache
+  private readonly MAX_CACHE_SIZE = 100;
+
+  // Map to track ongoing requests by chatId
+  private activeRequests: Map<string, AbortController> = new Map();
 
   constructor(storage: vscode.Memento, pastChatsProvider: HistoryPanel) {
     this.storage = storage;
@@ -34,32 +40,49 @@ export class APIService {
     this.initializeAnthropicClient();
   }
 
-  initializeAnthropicClient() {
+  /**
+   * Initializes or reinitializes the Anthropic client with the current API key
+   */
+  public initializeAnthropicClient() {
+    const apiKey = vscode.workspace.getConfiguration('codabra').get<string>('apiKey');
 
-    try {
-
-      const apiKey = vscode.workspace.getConfiguration('codabra').get<string>('apiKey');
-
-      if (apiKey) {
-
-        try {
-          this.anthropic = new Anthropic({ apiKey: apiKey });
-        } catch (clientError) {
-          vscode.window.showErrorMessage(`Failed to initialize Anthropic client: ${clientError instanceof Error ? clientError.message : String(clientError)}`);
-          this.anthropic = undefined;
-        }
-
-      } else
+    if (apiKey) {
+      try {
+        this.anthropic = new Anthropic({ apiKey: apiKey });
+      } catch (error) {
+        handleError(error, 'initializing Anthropic client');
         this.anthropic = undefined;
-
-    } catch (error) {
-      vscode.window.showErrorMessage(`Failed to initialize Anthropic client: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } else {
       this.anthropic = undefined;
     }
-
   }
 
+  /**
+   * Cancels an ongoing message request for a specific chat
+   * @param chatId The ID of the chat to cancel the request for
+   * @returns True if a request was cancelled, false otherwise
+   */
+  public cancelRequest(chatId: string): boolean {
+    const controller = this.activeRequests.get(chatId);
+    if (controller) {
+      controller.abort();
+      this.activeRequests.delete(chatId);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Sends a message to the Anthropic API and streams the response
+   * @param chatId The ID of the chat to send the message to
+   * @param message The message to send
+   * @param context Optional context from the editor
+   * @returns The assistant's response message, or undefined if there was an error
+   */
   public async sendMessage(chatId: string, message: string, context?: string): Promise<ChatMessage | undefined> {
+    // Cancel any existing request for this chat
+    this.cancelRequest(chatId);
 
     if (!this.anthropic) {
       vscode.window.showErrorMessage('Please set your Anthropic API key in the settings');
@@ -67,31 +90,52 @@ export class APIService {
     }
 
     const chat = await this.getChat(chatId);
-    if (!chat)
+    if (!chat) {
+      vscode.window.showErrorMessage('Chat not found');
       return undefined;
+    }
+
+    // Create a new abort controller for this request
+    const abortController = new AbortController();
+    this.activeRequests.set(chatId, abortController);
 
     // Add user message to chat
-    chat.messages.push({
+    const userMessage: ChatMessage = {
       role: 'user',
       content: message,
       timestamp: Date.now(),
       context: context
-    });
-    await this.updateChat(chat);
+    };
+
+    // Create a copy of the chat to avoid race conditions
+    const updatedChat: Chat = {
+      ...chat,
+      messages: [...chat.messages, userMessage],
+      updatedAt: Date.now()
+    };
+
+    // Update chat title if it's the first user message
+    if (updatedChat.messages.length === 1) {
+      updatedChat.title = this.generateChatTitle(message);
+    }
+
+    // Save the updated chat with the user message
+    await this.updateChat(updatedChat);
 
     try {
       // Get system prompt from settings or use default
-      let systemPrompt = vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt');
+      let systemPrompt = vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || '';
 
-      if (context)
+      if (context) {
         systemPrompt += " Here is some context from the editor that might be relevant: " + context;
+      }
 
       // Create a streaming response
-      const extendedThinking = vscode.workspace.getConfiguration('codabra').get<boolean>('extendedThinking');
+      const extendedThinking = vscode.workspace.getConfiguration('codabra').get<boolean>('extendedThinking') || false;
 
       const requestOptions: any = {
         model: 'claude-3-7-sonnet-latest',
-        messages: chat.messages.map(msg => ({ role: msg.role, content: msg.content })),
+        messages: updatedChat.messages.map(msg => ({ role: msg.role, content: msg.content })),
         temperature: 1,
         max_tokens: 64000,
         system: systemPrompt,
@@ -101,10 +145,9 @@ export class APIService {
       };
 
       // Only add budget_tokens when thinking is enabled
-      if (extendedThinking)
+      if (extendedThinking) {
         requestOptions.thinking.budget_tokens = 64000;
-
-      const stream = this.anthropic.messages.stream(requestOptions);
+      }
 
       // Create initial assistant message but don't add it to chat yet
       const assistantMessage: ChatMessage = {
@@ -113,50 +156,125 @@ export class APIService {
         timestamp: Date.now()
       };
 
-      // Update chat title if it's the first user message
-      if (chat.messages.length === 1)
-        chat.title = this.generateChatTitle(message);
-
       // Temporary content for UI updates during streaming
       let tempContent = '';
 
+      // Flag to track if the request has been aborted
+      let isAborted = false;
+
+      // Set up a listener for the abort event
+      abortController.signal.addEventListener('abort', () => {
+        isAborted = true;
+        console.log('Abort signal received, stream processing will stop');
+      });
+
+      // Create the stream without the signal parameter
+      const stream = this.anthropic.messages.stream(requestOptions);
+
       // Process the stream
-      for await (const chunk of stream) {
-        if (chunk.type === 'content_block_delta') {
-          if (chunk.delta.type === 'text_delta') { // Handle text content
-            tempContent += chunk.delta.text;
-            assistantMessage.content = tempContent;
+      try {
+        for await (const chunk of stream) {
+          // Check if the request has been aborted
+          if (isAborted) {
+            console.log('Stream processing aborted');
+            break;
+          }
 
-            // Create a temporary chat object with the current message for streaming updates
-            const tempChat = { ...chat };
-            tempChat.messages = [...chat.messages, assistantMessage];
+          if (chunk.type === 'content_block_delta') {
+            if (chunk.delta.type === 'text_delta') { // Handle text content
+              tempContent += chunk.delta.text;
 
-            // Update the chat in memory (but don't save to storage yet)
-            const chats = await this.getAllChats();
-            const index = chats.findIndex(c => c.id === chat.id);
-            if (index !== -1) {
-              chats[index] = tempChat;
+              // Create a copy of the assistant message with updated content
+              const updatedAssistantMessage: ChatMessage = {
+                ...assistantMessage,
+                content: tempContent
+              };
+
+              // Create a temporary chat object with the current message for streaming updates
+              const tempChat: Chat = {
+                ...updatedChat,
+                messages: [...updatedChat.messages, updatedAssistantMessage]
+              };
+
+              // Store the temporary chat in memory so it can be retrieved by getChat
+              const chats = await this.getAllChats();
+              const index = chats.findIndex(c => c.id === chatId);
+              if (index !== -1) {
+                chats[index] = tempChat;
+                // Update in memory only, don't save to storage yet
+                await this.storage.update('codabra-chats', chats);
+
+                // Fire the event to update UI in real-time
+                this._onDidChangeChats.fire();
+              }
             }
-
-            // Fire the event to update UI in real-time
-            this._onDidChangeChats.fire();
           }
         }
+      } catch (streamError: unknown) {
+        // If the request was aborted, handle it gracefully
+        if (isAborted) {
+          console.log('Request was cancelled during stream processing');
+          this.activeRequests.delete(chatId);
+          return undefined;
+        }
+        // Re-throw other errors to be caught by the outer try-catch
+        throw streamError;
       }
 
+      // If the request was aborted, don't save the message
+      if (isAborted) {
+        console.log('Request was cancelled');
+
+        // Create a partial message to indicate cancellation
+        const cancelledMessage: ChatMessage = {
+          role: 'assistant',
+          content: tempContent + '\n\n[Message generation cancelled by user]',
+          timestamp: Date.now()
+        };
+
+        // Save the partial message to the chat
+        const cancelledChat: Chat = {
+          ...updatedChat,
+          messages: [...updatedChat.messages, cancelledMessage],
+          updatedAt: Date.now()
+        };
+
+        // Update the chat with the cancelled message
+        await this.updateChat(cancelledChat);
+
+        // Clean up the abort controller
+        this.activeRequests.delete(chatId);
+        return cancelledMessage;
+      }
+
+      // Clean up the abort controller
+      this.activeRequests.delete(chatId);
+
       // Only add the assistant message to chat after successful completion
-      assistantMessage.content = tempContent;
-      chat.messages.push(assistantMessage);
-      chat.updatedAt = Date.now();
+      const finalAssistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: tempContent,
+        timestamp: Date.now()
+      };
+
+      // Create the final updated chat
+      const finalChat: Chat = {
+        ...updatedChat,
+        messages: [...updatedChat.messages, finalAssistantMessage],
+        updatedAt: Date.now()
+      };
 
       // Final update to save the completed message
-      await this.updateChat(chat);
+      await this.updateChat(finalChat);
 
-      return assistantMessage;
+      return finalAssistantMessage;
+    } catch (error: unknown) {
+      // Clean up the abort controller
+      this.activeRequests.delete(chatId);
 
-    } catch (error) {
-      console.error('Error sending message to Anthropic API:', error);
-      vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      // Use standardized error handling
+      handleError(error, 'sending message to Anthropic API');
+
       return undefined;
     }
   }
@@ -232,47 +350,89 @@ export class APIService {
   /**
    * Count tokens for a chat using the Anthropic SDK
    * @param chatId The ID of the chat to count tokens for
+   * @param retryCount Number of retries attempted (used internally)
    * @returns The number of tokens used by the chat, or undefined if the SDK is not initialized
    */
-  public async countTokens(chatId: string): Promise<number | undefined> {
+  public async countTokens(chatId: string, retryCount: number = 0): Promise<number | undefined> {
     if (!this.anthropic) {
-      vscode.window.showWarningMessage('Cannot count tokens: Anthropic API key not set');
       return undefined;
     }
 
     const chat = await this.getChat(chatId);
-    if (!chat)
+    if (!chat) {
       return undefined;
+    }
 
     // Generate a cache key based on chat content
     const cacheKey = `${chatId}-${chat.updatedAt}`;
 
     // Check if we have a cached result
-    if (this.tokenCountCache.has(cacheKey))
+    if (this.tokenCountCache.has(cacheKey)) {
       return this.tokenCountCache.get(cacheKey);
+    }
 
     try {
       // Prepare the request for token counting
       const response = await this.anthropic.messages.countTokens({
         model: 'claude-3-7-sonnet-latest',
         messages: chat.messages.map(msg => ({ role: msg.role, content: msg.content })),
-        system: vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || '' // Get system prompt from settings
+        system: vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || ''
       });
 
-      // Based on the Anthropic SDK documentation, the response contains input_tokens. For token counting, we're primarily concerned with input tokens
-      const totalTokens = response.input_tokens;
+      // Manage cache size before adding new entry
+      this.manageTokenCacheSize();
 
       // Cache the result
       this.tokenCountCache.set(cacheKey, response.input_tokens);
+      return response.input_tokens;
+    } catch (error: unknown) {
+      // Use standardized error handling but don't show to user for token counting
+      handleError(error, 'counting tokens', false);
 
-      // Return the total token count
-      return totalTokens;
-    } catch (error) {
-      console.error('Error counting tokens:', error);
-      vscode.window.showErrorMessage(`Error counting tokens: ${error instanceof Error ? error.message : String(error)}`);
+      // Check if we should retry (up to 2 times)
+      if (retryCount < 2) {
+        console.log(`Retrying token count for chat ${chatId}, attempt ${retryCount + 1}`);
+        // Wait a bit before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retryCount)));
+        return this.countTokens(chatId, retryCount + 1);
+      }
 
-      // Fall back to estimation if the API call fails
-      return chat.messages.reduce((total, msg) => total + Math.ceil(msg.content.length / 4), 0);
+      // After retries are exhausted, fall back to estimation
+      console.log(`Falling back to token estimation for chat ${chatId} after ${retryCount} retries`);
+
+      // Improved estimation based on character count
+      // Claude typically uses ~4 characters per token on average
+      const estimatedTokens = chat.messages.reduce((total, msg) => {
+        // Count characters in the message content
+        const charCount = msg.content.length;
+
+        // Add overhead for message metadata (role, etc.)
+        const overhead = 10; // Tokens for message metadata
+
+        // Estimate tokens based on character count (approx. 4 chars per token)
+        return total + overhead + Math.ceil(charCount / 4);
+      }, 0);
+
+      // Add system prompt estimation
+      const systemPrompt = vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || '';
+      const systemPromptTokens = Math.ceil(systemPrompt.length / 4);
+
+      return estimatedTokens + systemPromptTokens;
+    }
+  }
+
+  /**
+   * Manages the token count cache size to prevent memory leaks
+   * Removes oldest entries when the cache exceeds MAX_CACHE_SIZE
+   */
+  private manageTokenCacheSize(): void {
+    if (this.tokenCountCache.size >= this.MAX_CACHE_SIZE) {
+      // Get the oldest entries (first entries in the map)
+      const entriesToRemove = this.tokenCountCache.size - this.MAX_CACHE_SIZE + 1;
+      const keys = Array.from(this.tokenCountCache.keys()).slice(0, entriesToRemove);
+
+      // Remove the oldest entries
+      keys.forEach(key => this.tokenCountCache.delete(key));
     }
   }
 }
