@@ -20,6 +20,23 @@
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
     const loadingElement = document.getElementById('loading');
+
+    // Create cancel button element (initially hidden)
+    const cancelButton = document.createElement('button');
+    cancelButton.id = 'cancel-button';
+    cancelButton.className = 'cancel-button';
+    cancelButton.title = 'Cancel response';
+    cancelButton.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+    `;
+    cancelButton.style.display = 'none';
+
+    // Add cancel button after send button
+    sendButton.parentNode.insertBefore(cancelButton, sendButton.nextSibling);
     const chatView = document.getElementById('chat-view');
     const pastChatsView = document.getElementById('history-view');
     const pastChatsList = document.getElementById('history-list');
@@ -28,6 +45,8 @@
     const extendedThinkingToggle = document.getElementById('extended-thinking');
     const systemPromptInput = document.getElementById('system-prompt');
     const saveSettingsButton = document.getElementById('save-settings-button');
+    const contextUsageText = document.getElementById('context-usage-text');
+    const contextUsageBar = document.getElementById('context-usage-bar');
 
     // State
     let currentChat = null;
@@ -102,6 +121,24 @@
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
+    // Function to update streaming content with markdown rendering
+    function updateStreamingContent(content) {
+        const streamingContent = document.getElementById('streaming-content');
+        if (streamingContent) {
+            // Normalize line breaks and render markdown
+            const normalizedContent = content.replace(/\n{3,}/g, '\n\n');
+            streamingContent.innerHTML = marked.parse(normalizedContent);
+
+            // Apply syntax highlighting to code blocks
+            streamingContent.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    }
+
     // Handle messages from extension
     window.addEventListener('message', event => {
         switch (event.data.command) {
@@ -135,8 +172,55 @@
                 addMessage(event.data.message, 'assistant');
                 break;
 
-            case 'setLoading':
-                loadingElement.className = event.data.loading ? 'loading' : 'loading hidden';
+            case 'startStreaming':
+                // Create a streaming assistant message container
+                const streamingMessageElement = document.createElement('div');
+                streamingMessageElement.id = 'streaming-message';
+                streamingMessageElement.className = 'message assistant-message';
+
+                const streamingContentElement = document.createElement('div');
+                streamingContentElement.className = 'message-content markdown-content';
+                streamingContentElement.id = 'streaming-content';
+
+                streamingMessageElement.appendChild(streamingContentElement);
+                chatContainer.appendChild(streamingMessageElement);
+
+                // Scroll to bottom
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                // Disable input and show cancel button
+                messageInput.disabled = true;
+                messageInput.style.opacity = '0.6';
+                sendButton.disabled = true;
+                sendButton.style.opacity = '0.6';
+                cancelButton.style.display = 'flex';
+
+                // Add event listener to cancel button
+                cancelButton.onclick = function () {
+                    // TODO: Implement cancellation logic when backend supports it
+                    // For now, just end streaming UI state
+                    vscode.postMessage({ command: 'cancelStreaming' });
+                };
+                break;
+
+            case 'updateStreamingContent':
+                // Update the streaming content with the latest content
+                updateStreamingContent(event.data.content);
+                break;
+
+            case 'endStreaming':
+                // Re-enable input and hide cancel button
+                messageInput.disabled = false;
+                messageInput.style.opacity = '1';
+                sendButton.disabled = false;
+                sendButton.style.opacity = '1';
+                cancelButton.style.display = 'none';
+
+                // Remove streaming message element (it will be replaced by the final message)
+                const streamingElement = document.getElementById('streaming-message');
+                if (streamingElement) {
+                    streamingElement.remove();
+                }
                 break;
 
             case 'loadSettings': // Show the settings view
@@ -162,6 +246,10 @@
 
                 // Set the active panel context
                 vscode.postMessage({ command: 'setContext', key: 'activeWebviewPanelId', value: 'chat-view' });
+                break;
+
+            case 'updateContextUsage': // Update the context usage bar
+                updateContextUsage(event.data.used, event.data.total);
                 break;
 
             case 'loadPastChats': // Show the past chats view
@@ -279,6 +367,33 @@
         originalAddMessage(content, role);
     };
 
+    // Function to update the context usage bar
+    function updateContextUsage(used, total) {
+        // Format the numbers
+        const usedFormatted = used >= 1000 ? (used / 1000).toFixed(0) + 'K' : used;
+        const totalFormatted = total >= 1000 ? (total / 1000).toFixed(0) + 'K' : total;
+
+        // Calculate percentage
+        const percentage = Math.min(100, Math.round((used / total) * 100));
+
+        // Update the text
+        contextUsageText.textContent = `${usedFormatted} / ${totalFormatted} tokens (${percentage}%)`;
+
+        // Update the progress bar
+        contextUsageBar.style.width = `${percentage}%`;
+
+        // Change color based on usage
+        if (percentage < 70)
+            contextUsageBar.style.backgroundColor = 'var(--vscode-progressBar-background)';
+        else if (percentage < 90)
+            contextUsageBar.style.backgroundColor = 'var(--vscode-editorWarning-foreground)';
+        else
+            contextUsageBar.style.backgroundColor = 'var(--vscode-editorError-foreground)';
+    }
+
     // Show startup message initially
     showStartupMessageIfEmpty();
+
+    // Initialize context usage
+    updateContextUsage(0, 200000);
 }());

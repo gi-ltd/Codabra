@@ -1,53 +1,92 @@
 import * as vscode from 'vscode';
 import { APIService } from './apiService';
-import { promises as fs } from 'fs';
+import { WebviewManager } from './webviewManager';
+import { ChatManager } from './chatManager';
+import { SettingsManager, CodabraSettings } from './settingsManager';
+import { ContextUsageTracker } from './contextUsageTracker';
 
+/**
+ * Main panel class that coordinates between specialized managers
+ */
 export class ChatPanel implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codabra-view';
 
-  private _view?: vscode.WebviewView;
-  private _currentChatId?: string;
+  private _webviewManager: WebviewManager;
+  private _chatManager: ChatManager;
+  private _settingsManager: SettingsManager;
+  private _contextUsageTracker: ContextUsageTracker;
 
-  private _isHandlingMessage = false;
-
-  // Listen for changes to chats
-  constructor(private readonly _extensionUri: vscode.Uri, private readonly _chatProvider: APIService) {
-    this._chatProvider.onDidChangeChats(() => {
-      if (this._currentChatId && this._view && !this._isHandlingMessage) // Only reload the chat if we're not currently handling a message. This prevents duplicate messages when sending/receiving
-        this.loadChat(this._currentChatId);
-    });
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _apiService: APIService
+  ) {
+    // Initialize managers
+    this._webviewManager = new WebviewManager(_extensionUri);
+    this._chatManager = new ChatManager(_apiService, this._webviewManager);
+    this._settingsManager = new SettingsManager(this._webviewManager, _apiService);
+    this._contextUsageTracker = new ContextUsageTracker(this._webviewManager);
   }
 
-  public resolveWebviewView(webviewView: vscode.WebviewView, _context: vscode.WebviewViewResolveContext, _token: vscode.CancellationToken) {
-    this._view = webviewView;
+  /**
+   * Resolves the webview view
+   */
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ): void {
+    // Initialize the webview
+    this._webviewManager.initialize(webviewView)
+      .catch(error => vscode.window.showErrorMessage('Failed to initialize chat view: ' + error));
 
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'resources')]
-    };
+    // Initialize context usage tracker
+    this._contextUsageTracker.initialize();
 
-    this._update(webviewView.webview).catch(error => vscode.window.showErrorMessage('Failed to initialize chat view' + error));
+    // Register visibility change listener
+    webviewView.onDidChangeVisibility(async () => {
+      // Only act when the view becomes visible
+      if (webviewView.visible && this._chatManager.currentChatId) {
+        try {
+          const exists = await this._apiService.chatExists(this._chatManager.currentChatId);
+          if (exists) {
+            // Directly load the chat when the view becomes visible
+            await this._chatManager.loadChat(this._chatManager.currentChatId);
+          } else {
+            await this._chatManager.showPastChats();
+          }
+        } catch (error) {
+          console.error('Error restoring chat on visibility change:', error);
+          await this._chatManager.showPastChats();
+        }
+      }
+    });
 
+    // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
         case 'sendMessage':
-          await this.sendMessage(message.text);
+          await this._chatManager.sendMessage(message.text);
           break;
         case 'newChat':
-          await this.createNewChat();
+          await this._chatManager.createNewChat();
           break;
         case 'getSettings':
-          this.sendSettings();
+          this._settingsManager.sendSettings();
           break;
         case 'saveSettings':
-          await this.saveSettings(message.settings);
+          await this._settingsManager.saveSettings(message.settings);
           break;
         case 'openChat':
-          await this.loadChat(message.chatId);
+          await this._chatManager.loadChat(message.chatId);
           break;
         case 'deleteChat':
-          await this._chatProvider.deleteChat(message.chatId);
-          this.showPastChats(); // Refresh the past chats view
+          await this._chatManager.deleteChat(message.chatId);
+          break;
+        case 'cancelStreaming':
+          // Handle cancel streaming request
+          // For now, just end the streaming state in the UI
+          // In the future, this could abort the actual API request
+          this._webviewManager.postMessage({ command: 'endStreaming' });
           break;
         case 'setContext':
           await vscode.commands.executeCommand('setContext', message.key, message.value);
@@ -56,166 +95,53 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     });
   }
 
-  public async loadChat(chatId: string) {
-    if (!this._view)
-      return;
-
-    try {
-      // Set flag to prevent duplicate loading during chat loading
-      this._isHandlingMessage = true;
-
-      this._currentChatId = chatId;
-      const chat = await this._chatProvider.getChat(chatId);
-
-      if (chat)
-        this._view.webview.postMessage({ command: 'loadChat', chat: chat });
-    } finally {
-      // Reset flag when done
-      this._isHandlingMessage = false;
-    }
+  /**
+   * Creates a new chat
+   */
+  public async createNewChat(): Promise<void> {
+    return this._chatManager.createNewChat();
   }
 
-  public async createNewChat() {
-    if (!this._view)
-      return;
-
-    try {
-      // Set flag to prevent duplicate loading during chat creation
-      this._isHandlingMessage = true;
-
-      const chat = await this._chatProvider.createChat();
-      this._currentChatId = chat.id;
-      this._view.webview.postMessage({ command: 'loadChat', chat: chat });
-
-      // Focus the chat view
-      vscode.commands.executeCommand('codabra-view.focus');
-    } finally {
-      // Reset flag when done
-      this._isHandlingMessage = false;
-    }
+  /**
+   * Loads a chat by ID
+   */
+  public async loadChat(chatId: string): Promise<void> {
+    return this._chatManager.loadChat(chatId);
   }
 
-  public async sendMessage(text: string) {
-    if (!this._view)
-      return;
-
-    try {
-      // Set flag to prevent duplicate loading during message handling
-      this._isHandlingMessage = true;
-
-      if (!this._currentChatId) {
-        const chat = await this._chatProvider.createChat();
-        this._currentChatId = chat.id;
-      }
-
-      // Get context from active editor if available
-      let context: string | undefined;
-      const activeEditor = vscode.window.activeTextEditor;
-
-      if (activeEditor)
-        if (!activeEditor.selection.isEmpty)
-          context = activeEditor.document.getText(activeEditor.selection); // If there's a selection, use it as context
-        else
-          context = `File: ${activeEditor.document.fileName}, Language: ${activeEditor.document.languageId}`; // Otherwise, use the file name and language as context
-
-      this._view.webview.postMessage({ command: 'addUserMessage', message: text });
-      this._view.webview.postMessage({ command: 'setLoading', loading: true });
-      const response = await this._chatProvider.sendMessage(this._currentChatId, text, context);
-      this._view.webview.postMessage({ command: 'setLoading', loading: false });
-
-      if (response)
-        this._view.webview.postMessage({ command: 'addAssistantMessage', message: response.content });
-    } finally {
-      // Reset flag when done, regardless of success or failure
-      this._isHandlingMessage = false;
-    }
+  /**
+   * Shows the past chats view
+   */
+  public async showPastChats(): Promise<void> {
+    return this._chatManager.showPastChats();
   }
 
-  public sendSettings() {
-    if (!this._view)
-      return;
-
-    this._view.webview.postMessage({
-      command: 'loadSettings',
-      settings: {
-        apiKey: vscode.workspace.getConfiguration('codabra').get<string>('apiKey') || '',
-        extendedThinking: vscode.workspace.getConfiguration('codabra').get<boolean>('extendedThinking') || false,
-        systemPrompt: vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || ''
-      }
-    });
+  /**
+   * Shows the current chat view
+   */
+  public async showCurrentChat(): Promise<void> {
+    return this._chatManager.showCurrentChat();
   }
 
-  public async showPastChats() {
-    if (!this._view)
-      return;
-
-    // Get all chats
-    const chats = await this._chatProvider.getAllChats();
-
-    // Send them to the webview
-    this._view.webview.postMessage({
-      command: 'loadPastChats',
-      chats: chats
-    });
+  /**
+   * Sends settings to the webview
+   */
+  public sendSettings(): void {
+    return this._settingsManager.sendSettings();
   }
 
-  public showCurrentChat() {
-    if (!this._view)
-      return;
-
-    // Show the chat view
-    this._view.webview.postMessage({
-      command: 'showCurrentChat'
-    });
+  /**
+   * Updates the context usage display
+   */
+  public updateContextUsage(used: number, total: number = 200000): void {
+    return this._contextUsageTracker.updateContextUsage(used, total);
   }
 
-  public async saveSettings(settings: any) {
-    await vscode.workspace.getConfiguration('codabra').update('apiKey', settings.apiKey, vscode.ConfigurationTarget.Global);
-    await vscode.workspace.getConfiguration('codabra').update('extendedThinking', settings.extendedThinking, vscode.ConfigurationTarget.Global);
-    await vscode.workspace.getConfiguration('codabra').update('systemPrompt', settings.systemPrompt, vscode.ConfigurationTarget.Global);
-
-    // Reinitialize the Anthropic client with the new API key
-    this._chatProvider['initializeAnthropicClient']();
-
-    vscode.window.showInformationMessage('Codabra settings saved');
-  }
-
-  private async _update(webview: vscode.Webview) {
-
-    try {
-
-      // Get the resource path. Read the HTML, CSS, and JS content
-      const htmlContent = await fs.readFile(vscode.Uri.joinPath(this._extensionUri, 'resources', 'chat-panel.html').fsPath, 'utf8');
-      const cssContent = await fs.readFile(vscode.Uri.joinPath(this._extensionUri, 'resources', 'chat-panel.css').fsPath, 'utf8');
-      const jsContent = await fs.readFile(vscode.Uri.joinPath(this._extensionUri, 'resources', 'chat-panel.js').fsPath, 'utf8');
-
-      // Find the style tag where we'll inject the CSS
-      const styleTagId = 'vscode-css-styles';
-      // Find the script tag where we'll inject the JavaScript
-      const scriptTagId = 'vscode-js-script';
-
-      let processedHtml = htmlContent;
-
-      // Inject CSS
-      if (processedHtml.includes(`id="${styleTagId}"`))
-        processedHtml = processedHtml.replace(new RegExp(`<style id="${styleTagId}">.*?</style>`, 's'), `<style id="${styleTagId}">${cssContent}</style>`);
-      else
-        throw new Error(`Style tag with id="${styleTagId}" not found in HTML template`);
-
-
-      // Inject JavaScript
-      if (processedHtml.includes(`id="${scriptTagId}"`))
-        processedHtml = processedHtml.replace(new RegExp(`<script id="${scriptTagId}">.*?</script>`, 's'), `<script id="${scriptTagId}">${jsContent}</script>`);
-      else
-        throw new Error(`Script tag with id="${scriptTagId}" not found in HTML template`);
-
-      // Set the HTML content
-      webview.html = processedHtml;
-
-    } catch (error) {
-      vscode.window.showErrorMessage(`Failed to load chat view: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
-    }
-
+  /**
+   * Disposes of resources
+   */
+  public dispose(): void {
+    // Clean up resources
+    this._contextUsageTracker.dispose();
   }
 }

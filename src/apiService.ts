@@ -25,6 +25,9 @@ export class APIService {
   private _onDidChangeChats = new vscode.EventEmitter<void>();
   public readonly onDidChangeChats = this._onDidChangeChats.event;
 
+  // Cache for token counts to avoid unnecessary API calls
+  private tokenCountCache: Map<string, number> = new Map();
+
   constructor(storage: vscode.Memento, pastChatsProvider: HistoryPanel) {
     this.storage = storage;
     this.pastChatsProvider = pastChatsProvider;
@@ -118,15 +121,28 @@ export class APIService {
       let tempContent = '';
 
       // Process the stream
-      for await (const chunk of stream)
-        if (chunk.type === 'content_block_delta')
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta') {
           if (chunk.delta.type === 'text_delta') { // Handle text content
             tempContent += chunk.delta.text;
             assistantMessage.content = tempContent;
-            if (chunk.index % 5 === 0) { // Update the UI periodically to show streaming content
-              this._onDidChangeChats.fire(); // Just fire the event to update UI without saving to storage
+
+            // Create a temporary chat object with the current message for streaming updates
+            const tempChat = { ...chat };
+            tempChat.messages = [...chat.messages, assistantMessage];
+
+            // Update the chat in memory (but don't save to storage yet)
+            const chats = await this.getAllChats();
+            const index = chats.findIndex(c => c.id === chat.id);
+            if (index !== -1) {
+              chats[index] = tempChat;
             }
+
+            // Fire the event to update UI in real-time
+            this._onDidChangeChats.fire();
           }
+        }
+      }
 
       // Only add the assistant message to chat after successful completion
       assistantMessage.content = tempContent;
@@ -193,6 +209,11 @@ export class APIService {
     this.pastChatsProvider.refresh();
   }
 
+  public async chatExists(chatId: string): Promise<boolean> {
+    const chats = await this.getAllChats();
+    return chats.some(chat => chat.id === chatId);
+  }
+
   generateUniqueId = (): string => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
   generateChatTitle(firstMessage: string): string {
@@ -206,5 +227,52 @@ export class APIService {
 
     return title;
 
+  }
+
+  /**
+   * Count tokens for a chat using the Anthropic SDK
+   * @param chatId The ID of the chat to count tokens for
+   * @returns The number of tokens used by the chat, or undefined if the SDK is not initialized
+   */
+  public async countTokens(chatId: string): Promise<number | undefined> {
+    if (!this.anthropic) {
+      vscode.window.showWarningMessage('Cannot count tokens: Anthropic API key not set');
+      return undefined;
+    }
+
+    const chat = await this.getChat(chatId);
+    if (!chat)
+      return undefined;
+
+    // Generate a cache key based on chat content
+    const cacheKey = `${chatId}-${chat.updatedAt}`;
+
+    // Check if we have a cached result
+    if (this.tokenCountCache.has(cacheKey))
+      return this.tokenCountCache.get(cacheKey);
+
+    try {
+      // Prepare the request for token counting
+      const response = await this.anthropic.messages.countTokens({
+        model: 'claude-3-7-sonnet-latest',
+        messages: chat.messages.map(msg => ({ role: msg.role, content: msg.content })),
+        system: vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || '' // Get system prompt from settings
+      });
+
+      // Based on the Anthropic SDK documentation, the response contains input_tokens. For token counting, we're primarily concerned with input tokens
+      const totalTokens = response.input_tokens;
+
+      // Cache the result
+      this.tokenCountCache.set(cacheKey, response.input_tokens);
+
+      // Return the total token count
+      return totalTokens;
+    } catch (error) {
+      console.error('Error counting tokens:', error);
+      vscode.window.showErrorMessage(`Error counting tokens: ${error instanceof Error ? error.message : String(error)}`);
+
+      // Fall back to estimation if the API call fails
+      return chat.messages.reduce((total, msg) => total + Math.ceil(msg.content.length / 4), 0);
+    }
   }
 }

@@ -11,6 +11,7 @@
 - **Context-Aware**: Automatically includes relevant editor context with your queries
 - **Extended Thinking Mode**: Enable Claude's extended thinking capabilities for more complex problems
 - **Customizable System Prompt**: Configure the AI's behavior to suit your specific needs
+- **Context Usage Tracking**: Monitor your token usage with a visual progress bar
 
 ## Installation
 
@@ -59,6 +60,15 @@ When enabled, this option allows Claude to use its extended thinking capabilitie
 
 The system prompt defines how Claude behaves when responding to your queries. You can customize this to make Claude more focused on specific programming languages, frameworks, or coding styles.
 
+### Context Usage Tracking
+
+The context usage bar displays how much of Claude's context window is being used by your conversation. This helps you monitor your token usage and avoid hitting the context limit (200K tokens). The progress bar changes color based on usage:
+- Green: Normal usage (below 70%)
+- Yellow: Moderate usage (70-90%)
+- Red: High usage (above 90%)
+
+When you approach the context limit, consider starting a new chat to reset the context window.
+
 ## Privacy & Security
 
 - Your API key is stored locally in your VSCode settings
@@ -72,6 +82,18 @@ This project is licensed under the terms specified in the repository.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Architecture
+
+Codabra follows a modular architecture with clear separation of concerns:
+
+- **WebviewManager**: Handles webview initialization and communication
+- **ChatManager**: Manages chat operations (creating, loading, sending messages)
+- **SettingsManager**: Handles settings operations
+- **ContextUsageTracker**: Tracks and updates token usage
+- **ChatPanel**: Coordinates between specialized components
+
+This architecture makes the codebase more maintainable and easier to extend with new features.
 
 ## Support
 

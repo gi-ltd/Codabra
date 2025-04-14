@@ -2,7 +2,7 @@
   "name": "codabra",
   "displayName": "Codabra (Preview)",
   "description": "A simple, clean AI coding assistant",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "GeneralIntelligenceLTD",
   "license": "MIT",
   "icon": "icon.png",
@@ -63,7 +63,7 @@
       "view/title": [
         {
           "command": "codabra.showCurrentChat",
-          "when": "view == codabra-view && (activeWebviewPanelId == 'history-view' || activeWebviewPanelId == 'settings-view')",
+          "when": "view == codabra-view && (activeWebviewPanelId == 'history-view' || activeWebviewPanelId == 'settings-view') && codabra.hasCurrentChat",
           "group": "navigation@1"
         },
         {

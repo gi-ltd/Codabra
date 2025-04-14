@@ -39,27 +39,45 @@ const vscode = __importStar(require("vscode"));
 const apiService_1 = require("./apiService");
 const historyPanel_1 = require("./historyPanel");
 const chatPanel_1 = require("./chatPanel");
+// Store a reference to the chat panel for cleanup
+let chatViewProvider;
 function activate(context) {
     try {
         // Initialize storage for past chats. Create chat view provider
-        const chatViewProvider = new chatPanel_1.ChatPanel(context.extensionUri, new apiService_1.APIService(context.globalState, new historyPanel_1.HistoryPanel(context.globalState)));
+        chatViewProvider = new chatPanel_1.ChatPanel(context.extensionUri, new apiService_1.APIService(context.globalState, new historyPanel_1.HistoryPanel(context.globalState)));
         // Register the chat view provider
         context.subscriptions.push(vscode.window.registerWebviewViewProvider(chatPanel_1.ChatPanel.viewType, chatViewProvider));
+        // Register command to update context usage (used by ChatManager)
+        context.subscriptions.push(vscode.commands.registerCommand('codabra.updateContextUsage', (used) => {
+            if (chatViewProvider) {
+                chatViewProvider.updateContextUsage(used, 200000);
+            }
+        }));
         // Register commands
         context.subscriptions.push(vscode.commands.registerCommand('codabra.startChat', async () => {
+            if (!chatViewProvider)
+                return;
             await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first
             return chatViewProvider.createNewChat(); // Then create a new chat
         }), vscode.commands.registerCommand('codabra.viewPastChats', async () => {
-            await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first to ensure it's visible
-            return chatViewProvider.showPastChats(); // Then show the past chats in the webview
+            if (!chatViewProvider)
+                return;
+            await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first
+            return chatViewProvider.showPastChats(); // Then show the past chats
         }), vscode.commands.registerCommand('codabra.openChat', async (chatId) => {
+            if (!chatViewProvider)
+                return;
             await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first
             return chatViewProvider.loadChat(chatId); // Then load the chat
         }), vscode.commands.registerCommand('codabra.openSettings', async () => {
-            await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first to ensure it's visible
+            if (!chatViewProvider)
+                return;
+            await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first
             chatViewProvider.sendSettings(); // Then show the settings UI
         }), vscode.commands.registerCommand('codabra.showCurrentChat', async () => {
-            await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first to ensure it's visible
+            if (!chatViewProvider)
+                return;
+            await vscode.commands.executeCommand('codabra-view.focus'); // Focus the chat view first
             chatViewProvider.showCurrentChat(); // Then show the current chat
         }));
     }
@@ -70,8 +88,11 @@ function activate(context) {
 function deactivate() {
     // Clean up resources
     try {
-        // Dispose of any remaining subscriptions or resources
-        // This ensures proper cleanup when the extension is deactivated
+        // Dispose of the chat panel if it exists
+        if (chatViewProvider) {
+            chatViewProvider.dispose();
+            chatViewProvider = undefined;
+        }
         console.log('Codabra extension deactivated');
     }
     catch (error) {

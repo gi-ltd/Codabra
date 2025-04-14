@@ -243,6 +243,30 @@ body {
     background-color: var(--vscode-button-hoverBackground);
 }
 
+.cancel-button {
+    margin-left: 10px;
+    background-color: var(--vscode-editorError-foreground);
+    color: var(--vscode-button-foreground);
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.cancel-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.cancel-button:hover {
+    opacity: 0.8;
+}
+
 .loading {
     display: flex;
     align-items: center;
@@ -339,6 +363,33 @@ body {
 
 .hidden {
     display: none;
+}
+
+/* Context Usage Bar Styles */
+.context-usage {
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background-color: var(--vscode-editor-background);
+}
+
+.context-usage-label {
+    font-size: 0.8em;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 3px;
+}
+
+.context-usage-bar-container {
+    height: 4px;
+    background-color: var(--vscode-input-background);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.context-usage-bar {
+    height: 100%;
+    background-color: var(--vscode-progressBar-background);
+    border-radius: 2px;
+    transition: width 0.3s ease;
 }
 
 /* Toggle Switch Styles */
