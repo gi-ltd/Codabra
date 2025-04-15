@@ -243,28 +243,18 @@ body {
     background-color: var(--vscode-button-hoverBackground);
 }
 
-.cancel-button {
-    margin-left: 10px;
+/* Styling for send button when in cancel mode */
+.send-button.cancel-mode {
     background-color: var(--vscode-editorError-foreground);
-    color: var(--vscode-button-foreground);
-    border: none;
-    width: 36px;
-    height: 36px;
-    border-radius: 4px;
-    cursor: pointer;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
 }
 
-.cancel-button svg {
+.send-button.cancel-mode:hover {
+    opacity: 0.8;
+}
+
+.send-button.cancel-mode svg {
     width: 16px;
     height: 16px;
-}
-
-.cancel-button:hover {
-    opacity: 0.8;
 }
 
 .loading {

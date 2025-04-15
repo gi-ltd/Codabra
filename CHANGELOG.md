@@ -2,6 +2,10 @@
 
 All notable changes to the "Codabra" extension will be documented in this file.
 
+## [1.0.2] - 2025-04-15
+
+- Fixes
+
 ## [1.0.1] - 2025-04-14
 
 ### Added

@@ -21,22 +21,19 @@
     const sendButton = document.getElementById('send-button');
     const loadingElement = document.getElementById('loading');
 
-    // Create cancel button element (initially hidden)
-    const cancelButton = document.createElement('button');
-    cancelButton.id = 'cancel-button';
-    cancelButton.className = 'cancel-button';
-    cancelButton.title = 'Cancel response';
-    cancelButton.innerHTML = `
+    // We'll modify the send button to become a cancel button when needed
+    // Store the original send button content
+    const sendButtonOriginalHTML = sendButton.innerHTML;
+    const sendButtonOriginalTitle = sendButton.title;
+
+    // Define cancel button content
+    const cancelButtonHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
     `;
-    cancelButton.style.display = 'none';
-
-    // Add cancel button after send button
-    sendButton.parentNode.insertBefore(cancelButton, sendButton.nextSibling);
     const chatView = document.getElementById('chat-view');
     const pastChatsView = document.getElementById('history-view');
     const pastChatsList = document.getElementById('history-list');
@@ -188,21 +185,23 @@
                 // Scroll to bottom
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
-                // Disable input and show cancel button
+                // Disable input and transform send button into cancel button
                 messageInput.disabled = true;
                 messageInput.style.opacity = '0.6';
-                sendButton.disabled = true;
-                sendButton.style.opacity = '0.6';
-                cancelButton.style.display = 'flex';
 
-                // Add event listener to cancel button
-                cancelButton.onclick = function () {
+                // Transform send button into cancel button
+                sendButton.innerHTML = cancelButtonHTML;
+                sendButton.title = 'Cancel response';
+                sendButton.classList.add('cancel-mode');
+
+                // Change the event listener for the button
+                sendButton.onclick = function () {
                     // Send cancellation request to the backend
                     vscode.postMessage({ command: 'cancelStreaming' });
 
-                    // Disable the cancel button to prevent multiple cancellations
-                    cancelButton.disabled = true;
-                    cancelButton.style.opacity = '0.5';
+                    // Disable the button to prevent multiple cancellations
+                    sendButton.disabled = true;
+                    sendButton.style.opacity = '0.5';
                 };
                 break;
 
@@ -212,14 +211,19 @@
                 break;
 
             case 'endStreaming':
-                // Re-enable input and hide cancel button
+                // Re-enable input and restore send button
                 messageInput.disabled = false;
                 messageInput.style.opacity = '1';
+
+                // Restore send button
+                sendButton.innerHTML = sendButtonOriginalHTML;
+                sendButton.title = sendButtonOriginalTitle;
+                sendButton.classList.remove('cancel-mode');
                 sendButton.disabled = false;
                 sendButton.style.opacity = '1';
-                cancelButton.disabled = false;
-                cancelButton.style.opacity = '1';
-                cancelButton.style.display = 'none';
+
+                // Restore the original click event
+                sendButton.onclick = sendMessage;
 
                 // Remove streaming message element (it will be replaced by the final message)
                 const streamingElement = document.getElementById('streaming-message');
