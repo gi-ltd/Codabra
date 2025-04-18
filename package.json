@@ -2,7 +2,7 @@
   "name": "codabra",
   "displayName": "Codabra (Preview)",
   "description": "A simple, clean AI coding assistant",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "GeneralIntelligenceLTD",
   "license": "MIT",
   "icon": "icon.png",
@@ -39,16 +39,6 @@
         "icon": "$(add)"
       },
       {
-        "command": "codabra.viewPastChats",
-        "title": "Codabra: View Past Chats",
-        "icon": "$(history)"
-      },
-      {
-        "command": "codabra.deleteChat",
-        "title": "Delete Chat",
-        "icon": "$(trash)"
-      },
-      {
         "command": "codabra.openSettings",
         "title": "Codabra: Settings",
         "icon": "$(gear)"
@@ -63,18 +53,13 @@
       "view/title": [
         {
           "command": "codabra.showCurrentChat",
-          "when": "view == codabra-view && (activeWebviewPanelId == 'history-view' || activeWebviewPanelId == 'settings-view') && codabra.hasCurrentChat",
+          "when": "view == codabra-view && activeWebviewPanelId == 'settings-view' && codabra.hasCurrentChat",
           "group": "navigation@1"
         },
         {
           "command": "codabra.startChat",
           "when": "view == codabra-view",
           "group": "navigation@2"
-        },
-        {
-          "command": "codabra.viewPastChats",
-          "when": "view == codabra-view",
-          "group": "navigation@3"
         },
         {
           "command": "codabra.openSettings",
@@ -85,13 +70,6 @@
       "commandPalette": [
         {
           "command": "codabra.startChat"
-        },
-        {
-          "command": "codabra.viewPastChats"
-        },
-        {
-          "command": "codabra.deleteChat",
-          "when": "false"
         }
       ]
     },

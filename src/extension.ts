@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { APIService } from './apiService';
-import { HistoryPanel } from './historyPanel';
 import { ChatPanel } from './chatPanel';
 import { ResourceManager } from './utils/resourceManager';
 import { EventManager } from './utils/eventManager';
@@ -14,7 +13,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize the chat panel
     chatViewProvider = new ChatPanel(
       context.extensionUri,
-      new APIService(context.globalState, new HistoryPanel(context.globalState))
+      new APIService(context.globalState)
     );
 
     // Register the webview provider
@@ -39,16 +38,6 @@ export function activate(context: vscode.ExtensionContext) {
         if (!chatViewProvider) return;
         await vscode.commands.executeCommand('codabra-view.focus');
         return chatViewProvider.createNewChat();
-      }),
-      vscode.commands.registerCommand('codabra.viewPastChats', async () => {
-        if (!chatViewProvider) return;
-        await vscode.commands.executeCommand('codabra-view.focus');
-        return chatViewProvider.showPastChats();
-      }),
-      vscode.commands.registerCommand('codabra.openChat', async (chatId: string) => {
-        if (!chatViewProvider) return;
-        await vscode.commands.executeCommand('codabra-view.focus');
-        return chatViewProvider.loadChat(chatId);
       }),
       vscode.commands.registerCommand('codabra.openSettings', async () => {
         if (!chatViewProvider) return;

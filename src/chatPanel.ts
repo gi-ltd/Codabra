@@ -52,11 +52,11 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             // Directly load the chat when the view becomes visible
             await this._chatManager.loadChat(this._chatManager.currentChatId);
           } else {
-            await this._chatManager.showPastChats();
+            await this._chatManager.createNewChat();
           }
         } catch (error) {
           console.error('Error restoring chat on visibility change:', error);
-          await this._chatManager.showPastChats();
+          await this._chatManager.createNewChat();
         }
       }
     });
@@ -85,9 +85,6 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         case 'openChat':
           await this._chatManager.loadChat(message.chatId);
           break;
-        case 'deleteChat':
-          await this._chatManager.deleteChat(message.chatId);
-          break;
         case 'cancelStreaming':
           // Cancel the streaming request in the API
           this._chatManager.cancelStreaming();
@@ -114,12 +111,6 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     return this._chatManager.loadChat(chatId);
   }
 
-  /**
-   * Shows the past chats view
-   */
-  public async showPastChats(): Promise<void> {
-    return this._chatManager.showPastChats();
-  }
 
   /**
    * Shows the current chat view

@@ -71,13 +71,14 @@ export class ChatManager {
             }
           }).catch(error => handleError(error, 'counting tokens', false));
         } else {
-          // If the chat doesn't exist, clear the current chat ID and show past chats
+          // If the chat doesn't exist, clear the current chat ID and create a new chat
           this._currentChatId = undefined;
 
           // Update context to indicate we don't have a current chat
           EventManager.setVSCodeContext('codabra.hasCurrentChat', false);
 
-          this.showPastChats();
+          // Create a new chat instead of showing past chats
+          this.createNewChat();
         }
       } catch (error) {
         handleError(error, 'loading chat');
@@ -247,27 +248,6 @@ export class ChatManager {
   }
 
   /**
-   * Shows the past chats view
-   */
-  public async showPastChats(): Promise<void> {
-    if (!this._webviewManager.view) {
-      return;
-    }
-
-    // Get all chats
-    const chats = await this._apiService.getAllChats();
-
-    // Update context to indicate whether there's a current chat
-    const hasCurrentChat = this._currentChatId !== undefined &&
-      await this._apiService.chatExists(this._currentChatId);
-
-    await vscode.commands.executeCommand('setContext', 'codabra.hasCurrentChat', hasCurrentChat);
-
-    // Send them to the webview
-    this._webviewManager.postMessage({ command: 'loadPastChats', chats: chats });
-  }
-
-  /**
    * Shows the current chat view
    */
   public async showCurrentChat(): Promise<void> {
@@ -275,10 +255,10 @@ export class ChatManager {
       return;
     }
 
-    // If there's no current chat ID or the chat doesn't exist anymore, show past chats
+    // If there's no current chat ID or the chat doesn't exist anymore, create a new chat
     if (!this._currentChatId || !(await this._apiService.chatExists(this._currentChatId))) {
       this._currentChatId = undefined;
-      return this.showPastChats();
+      return this.createNewChat();
     }
 
     // Show the chat view
@@ -290,20 +270,6 @@ export class ChatManager {
         this.updateContextUsage(tokens);
       }
     });
-  }
-
-  /**
-   * Deletes a chat by ID
-   */
-  public async deleteChat(chatId: string): Promise<void> {
-    if (this._currentChatId === chatId) {
-      // Check if the deleted chat is the current chat
-      this._currentChatId = undefined;
-      await vscode.commands.executeCommand('setContext', 'codabra.hasCurrentChat', false);
-    }
-
-    await this._apiService.deleteChat(chatId);
-    this.showPastChats(); // Refresh the past chats view
   }
 
   /**

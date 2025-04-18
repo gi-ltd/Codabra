@@ -35,8 +35,6 @@
         </svg>
     `;
     const chatView = document.getElementById('chat-view');
-    const pastChatsView = document.getElementById('history-view');
-    const pastChatsList = document.getElementById('history-list');
     const settingsView = document.getElementById('settings-view');
     const apiKeyInput = document.getElementById('api-key');
     const extendedThinkingToggle = document.getElementById('extended-thinking');
@@ -68,10 +66,10 @@
     sendButton.addEventListener('click', sendMessage);
 
     // Attach script button click handler
-    attachScriptButton.addEventListener('click', function() {
+    attachScriptButton.addEventListener('click', function () {
         // Request the active editor content from the extension
         vscode.postMessage({ command: 'getActiveEditorContent' });
-        
+
         // Set up a fallback in case no editor is found
         // If after 1 second no script is attached, show a manual input option
         setTimeout(() => {
@@ -90,13 +88,13 @@
         const scriptContainer = document.createElement('div');
         scriptContainer.className = 'script-attachment-container';
         scriptContainer.dataset.index = index;
-        
+
         const scriptHeader = document.createElement('div');
         scriptHeader.className = 'script-attachment-header';
-        
+
         const scriptTitle = document.createElement('span');
         scriptTitle.textContent = `Script ${index + 1}: ${language}`;
-        
+
         const removeButton = document.createElement('button');
         removeButton.className = 'remove-script-button';
         removeButton.title = 'Remove script';
@@ -107,39 +105,39 @@
                 <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
         `;
-        
+
         // Add click event to remove this specific script
-        removeButton.addEventListener('click', function() {
+        removeButton.addEventListener('click', function () {
             removeScriptAttachment(index);
         });
-        
+
         scriptHeader.appendChild(scriptTitle);
         scriptHeader.appendChild(removeButton);
-        
+
         const scriptContent = document.createElement('pre');
         scriptContent.className = 'script-content';
         scriptContent.textContent = script;
-        
+
         // Add syntax highlighting if language is available
         if (language && hljs.getLanguage(language)) {
             const codeElement = document.createElement('code');
             codeElement.className = `language-${language}`;
             codeElement.textContent = script;
-            
+
             // Apply syntax highlighting
             hljs.highlightElement(codeElement);
-            
+
             // Clear and append the highlighted code
             scriptContent.innerHTML = '';
             scriptContent.appendChild(codeElement);
         }
-        
+
         scriptContainer.appendChild(scriptHeader);
         scriptContainer.appendChild(scriptContent);
-        
+
         return scriptContainer;
     }
-    
+
     // Function to add a script attachment
     function addScriptAttachment(script, language) {
         // Validate inputs
@@ -147,62 +145,62 @@
             console.warn('Attempted to add empty script');
             return;
         }
-        
+
         // Normalize language
         const normalizedLanguage = language || 'text';
-        
+
         // Limit script size to prevent performance issues (100KB limit)
         const MAX_SCRIPT_SIZE = 100 * 1024;
         let scriptContent = script;
         if (script.length > MAX_SCRIPT_SIZE) {
-            scriptContent = script.substring(0, MAX_SCRIPT_SIZE) + 
+            scriptContent = script.substring(0, MAX_SCRIPT_SIZE) +
                 '\n\n// Note: Script was truncated due to size limitations';
             console.warn(`Script truncated from ${script.length} to ${MAX_SCRIPT_SIZE} characters`);
         }
-        
+
         // Add to the scripts array with a unique ID
         const scriptId = Date.now() + '-' + Math.random().toString(36).substring(2, 9);
-        attachedScripts.push({ 
+        attachedScripts.push({
             id: scriptId,
-            content: scriptContent, 
-            language: normalizedLanguage 
+            content: scriptContent,
+            language: normalizedLanguage
         });
-        
+
         // Limit the number of scripts to prevent performance issues
         const MAX_SCRIPTS = 5;
         if (attachedScripts.length > MAX_SCRIPTS) {
             attachedScripts.shift(); // Remove the oldest script
             console.warn(`Maximum script limit (${MAX_SCRIPTS}) reached, removed oldest script`);
         }
-        
+
         // Create the script element
         const scriptElement = createScriptElement(scriptContent, normalizedLanguage, attachedScripts.length - 1);
-        
+
         // Add to the container
         scriptsContainer.appendChild(scriptElement);
-        
+
         // Add "Add Another Script" button if it doesn't exist and this is the first script
         if (attachedScripts.length === 1) {
             addAnotherScriptButton();
         }
-        
+
         // Return the script ID for reference
         return scriptId;
     }
-    
+
     // Function to add the "Add Another Script" button
     function addAnotherScriptButton() {
         // Check if button already exists
         if (document.getElementById('add-another-script-button')) {
             return;
         }
-        
+
         // Check if we've reached the maximum number of scripts
         const MAX_SCRIPTS = 5;
         if (attachedScripts.length >= MAX_SCRIPTS) {
             return; // Don't add the button if we've reached the limit
         }
-        
+
         const addButton = document.createElement('button');
         addButton.id = 'add-another-script-button';
         addButton.className = 'add-another-script-button';
@@ -214,16 +212,16 @@
             </svg>
             Add Another Script
         `;
-        
+
         // Add click event to add another script
-        addButton.addEventListener('click', function() {
+        addButton.addEventListener('click', function () {
             // Request to select a different file
             vscode.postMessage({ command: 'selectFileForScript' });
         });
-        
+
         scriptsContainer.appendChild(addButton);
     }
-    
+
     // Function to remove a script attachment
     function removeScriptAttachment(index) {
         // Validate index
@@ -231,50 +229,50 @@
             console.warn(`Invalid script index: ${index}`);
             return;
         }
-        
+
         try {
             // Remove from the array
             attachedScripts.splice(index, 1);
-            
+
             // Rebuild the UI
             updateScriptAttachmentsUI();
         } catch (error) {
             console.error('Error removing script attachment:', error);
-            
+
             // Fallback: clear all scripts and rebuild from scratch
             clearAllScriptAttachments();
         }
     }
-    
+
     // Function to update the script attachments UI
     function updateScriptAttachmentsUI() {
         try {
             // Clear the container
             scriptsContainer.innerHTML = '';
-            
+
             // Add each script
             attachedScripts.forEach((script, index) => {
                 if (!script || !script.content) {
                     console.warn(`Invalid script at index ${index}, skipping`);
                     return;
                 }
-                
+
                 const scriptElement = createScriptElement(script.content, script.language || 'text', index);
                 scriptsContainer.appendChild(scriptElement);
             });
-            
+
             // Add the "Add Another Script" button if there are scripts
             if (attachedScripts.length > 0) {
                 addAnotherScriptButton();
             }
         } catch (error) {
             console.error('Error updating script attachments UI:', error);
-            
+
             // Fallback: clear everything
             scriptsContainer.innerHTML = '';
         }
     }
-    
+
     // Function to clear all script attachments
     function clearAllScriptAttachments() {
         attachedScripts = [];
@@ -308,15 +306,15 @@
                 command: 'sendMessage',
                 text: text
             };
-            
+
             // Add script attachments if present
             if (attachedScripts.length > 0) {
                 messageData.scripts = attachedScripts;
             }
-            
+
             // Send message to extension
             vscode.postMessage(messageData);
-            
+
             // Clear input and script attachments
             messageInput.value = '';
             clearAllScriptAttachments();
@@ -338,13 +336,13 @@
             contentElement.innerHTML = marked.parse(normalizedContent);
 
             contentElement.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block)); // Apply syntax highlighting to code blocks
-            
+
             messageElement.appendChild(contentElement);
         } else { // For user messages, just use text
             contentElement.className = 'message-content';
             contentElement.textContent = content;
             messageElement.appendChild(contentElement);
-            
+
             // Handle script attachments
             if (scripts) {
                 // If scripts is an array, handle multiple scripts
@@ -352,20 +350,20 @@
                     scripts.forEach((script, index) => {
                         addScriptToMessage(messageElement, script, index);
                     });
-                } 
+                }
                 // If scripts is a single object, handle it as a single script (for backward compatibility)
                 else if (typeof scripts === 'object' && scripts.content) {
                     addScriptToMessage(messageElement, scripts, 0);
                 }
             }
         }
-        
+
         chatContainer.appendChild(messageElement);
-        
+
         // Scroll to bottom
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
-    
+
     // Helper function to add a script to a message
     function addScriptToMessage(messageElement, script, index) {
         try {
@@ -374,24 +372,24 @@
                 console.warn('Invalid script object:', script);
                 return;
             }
-            
+
             // Ensure script has content
             if (!script.content) {
                 console.warn('Script missing content:', script);
                 return;
             }
-            
+
             // Normalize language
             const language = script.language || 'text';
-            
+
             // Create script element
             const scriptElement = document.createElement('div');
             scriptElement.className = 'message-script-attachment';
-            
+
             // Create header
             const scriptHeader = document.createElement('div');
             scriptHeader.className = 'message-script-header';
-            
+
             // Determine header text based on context
             let headerText;
             if (Array.isArray(script.scripts) && script.scripts.length > 1) {
@@ -399,16 +397,16 @@
             } else {
                 headerText = `Attached Script (${language}):`;
             }
-            
+
             scriptHeader.textContent = headerText;
-            
+
             // Create content container
             const scriptContent = document.createElement('pre');
             scriptContent.className = 'message-script-content';
-            
+
             // Create code element with syntax highlighting
             const codeElement = document.createElement('code');
-            
+
             // Apply language class if available in highlight.js
             if (language && hljs.getLanguage(language)) {
                 codeElement.className = `language-${language}`;
@@ -416,19 +414,19 @@
                 // Fallback to text or auto-detection
                 codeElement.className = 'language-text';
             }
-            
+
             // Limit content size for performance
             const MAX_DISPLAY_SIZE = 50 * 1024; // 50KB
             let displayContent = script.content;
-            
+
             if (displayContent.length > MAX_DISPLAY_SIZE) {
-                displayContent = displayContent.substring(0, MAX_DISPLAY_SIZE) + 
+                displayContent = displayContent.substring(0, MAX_DISPLAY_SIZE) +
                     '\n\n// Note: Script display was truncated due to size limitations';
             }
-            
+
             // Set content and apply highlighting
             codeElement.textContent = displayContent;
-            
+
             try {
                 hljs.highlightElement(codeElement);
             } catch (highlightError) {
@@ -436,12 +434,12 @@
                 // Fallback to plain text if highlighting fails
                 codeElement.className = '';
             }
-            
+
             // Assemble the elements
             scriptContent.appendChild(codeElement);
             scriptElement.appendChild(scriptHeader);
             scriptElement.appendChild(scriptContent);
-            
+
             // Add the script element after the content element
             messageElement.appendChild(scriptElement);
         } catch (error) {
@@ -477,13 +475,12 @@
                     addScriptAttachment(event.data.content, event.data.language);
                 }
                 break;
-                
+
             case 'loadChat':
                 currentChat = event.data.chat;
                 chatContainer.innerHTML = '';
 
                 // Show the chat view
-                pastChatsView.style.display = 'none';
                 settingsView.style.display = 'none';
                 chatView.style.display = 'flex';
 
@@ -524,9 +521,11 @@
                 // Scroll to bottom
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
-                // Disable input and transform send button into cancel button
+                // Disable input, attachment button, and transform send button into cancel button
                 messageInput.disabled = true;
                 messageInput.style.opacity = '0.6';
+                attachScriptButton.disabled = true;
+                attachScriptButton.style.opacity = '0.6';
 
                 // Transform send button into cancel button
                 sendButton.innerHTML = cancelButtonHTML;
@@ -550,9 +549,11 @@
                 break;
 
             case 'endStreaming':
-                // Re-enable input and restore send button
+                // Re-enable input, attachment button, and restore send button
                 messageInput.disabled = false;
                 messageInput.style.opacity = '1';
+                attachScriptButton.disabled = false;
+                attachScriptButton.style.opacity = '1';
 
                 // Restore send button
                 sendButton.innerHTML = sendButtonOriginalHTML;
@@ -581,7 +582,6 @@
             case 'loadSettings': // Show the settings view
 
                 chatView.style.display = 'none';
-                pastChatsView.style.display = 'none';
                 settingsView.style.display = 'block';
 
                 // Set the active panel context
@@ -595,7 +595,6 @@
 
             case 'showCurrentChat': // Show the chat view
 
-                pastChatsView.style.display = 'none';
                 settingsView.style.display = 'none';
                 chatView.style.display = 'flex';
 
@@ -607,79 +606,6 @@
                 updateContextUsage(event.data.used, event.data.total);
                 break;
 
-            case 'loadPastChats': // Show the past chats view
-
-                chatView.style.display = 'none';
-                settingsView.style.display = 'none';
-                pastChatsView.style.display = 'block';
-
-                // Set the active panel context
-                vscode.postMessage({ command: 'setContext', key: 'activeWebviewPanelId', value: 'history-view' });
-
-                // Load the past chats
-                if (event.data.chats && event.data.chats.length > 0) {
-
-                    pastChatsList.innerHTML = '';
-                    event.data.chats.forEach(chat => {
-
-                        const chatElement = document.createElement('div');
-                        chatElement.className = 'past-chat-item';
-                        chatElement.innerHTML = `
-                            <div class="chat-title">${chat.title}</div>
-                            <div class="chat-date">${new Date(chat.updatedAt).toLocaleString()}</div>
-                            <div class="delete-icon" title="Delete chat">
-                                <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3h3v1h-1v9l-1 1H4l-1-1V4H2V3h3V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1zM9 2H6v1h3V2zM4 13h7V4H4v9zm2-8H5v7h1V5zm1 0h1v7H7V5zm2 0h1v7H9V5z"/>
-                                </svg>
-                            </div>
-                        `;
-
-                        // Add click event for the chat item (excluding the delete icon)
-                        chatElement.addEventListener('click', function (e) {
-                            // Check if the click was on the delete icon
-                            if (e.target.closest('.delete-icon')) {
-                                e.stopPropagation(); // Prevent the chat from opening
-                                return;
-                            }
-                            vscode.postMessage({ command: 'openChat', chatId: chat.id });
-
-                            // Show the chat view
-                            pastChatsView.style.display = 'none';
-                            chatView.style.display = 'flex';
-
-                            // Set the active panel context
-                            vscode.postMessage({ command: 'setContext', key: 'activeWebviewPanelId', value: 'chat-view' });
-                        });
-
-                        // Add click event for the delete icon - directly delete without confirmation since confirm() is not allowed in the sandboxed environment
-                        chatElement.querySelector('.delete-icon').addEventListener('click', function (e) {
-                            e.stopPropagation(); // Prevent the chat from opening
-                            vscode.postMessage({ command: 'deleteChat', chatId: chat.id });
-                        });
-
-                        // Also add event listeners to the SVG and path elements to ensure clicks are captured
-                        const svg = chatElement.querySelector('.delete-icon').querySelector('svg');
-
-                        if (svg) {
-                            svg.addEventListener('click', function (e) {
-                                e.stopPropagation(); // Prevent the chat from opening
-                                vscode.postMessage({ command: 'deleteChat', chatId: chat.id });
-                            });
-
-                            const path = svg.querySelector('path');
-                            if (path) {
-                                path.addEventListener('click', function (e) {
-                                    e.stopPropagation(); // Prevent the chat from opening
-                                    vscode.postMessage({ command: 'deleteChat', chatId: chat.id });
-                                });
-                            }
-                        }
-
-                        pastChatsList.appendChild(chatElement);
-                    });
-                } else
-                    pastChatsList.innerHTML = '<div class="loading-message">No past chats found.</div>';
-                break;
         }
 
         // Send a response back to confirm message was received

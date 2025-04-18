@@ -8,7 +8,6 @@
 - **Clean Chat Interface**: Interact with Claude through a simple, intuitive chat panel in the VSCode sidebar
 - **Script Attachments**: Attach code from your active editor to your messages for more targeted assistance
 - **Markdown Support**: View responses with proper formatting, syntax highlighting, and code blocks
-- **Chat History**: Access and manage your past conversations
 - **Context-Aware**: Automatically includes relevant editor context with your queries
 - **Extended Thinking Mode**: Enable Claude's extended thinking capabilities for more complex problems
 - **Customizable System Prompt**: Configure the AI's behavior to suit your specific needs
@@ -22,7 +21,7 @@
 
 ## Requirements
 
-- Visual Studio Code version 1.60.0 or higher
+- Visual Studio Code version 1.63.0 or higher
 - An Anthropic API key with access to Claude models
 
 ## Usage
@@ -55,12 +54,6 @@ This feature is particularly useful when you need to discuss multiple related fi
 - A class and its test file
 - A frontend component and its backend API
 - Multiple files that work together in a complex feature
-
-### Viewing Chat History
-
-1. Click the history icon in the sidebar to view your past conversations
-2. Click on any past chat to open it
-3. Use the delete icon to remove unwanted conversations
 
 ### Configuring Settings
 

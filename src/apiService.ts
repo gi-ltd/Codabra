@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import Anthropic from '@anthropic-ai/sdk';
-import { HistoryPanel } from './historyPanel';
 import { handleError } from './utils/errorHandler';
 
 export interface ScriptAttachment {
@@ -28,7 +27,6 @@ export interface Chat {
 export class APIService {
   private anthropic: Anthropic | undefined;
   private storage: vscode.Memento;
-  private pastChatsProvider: HistoryPanel;
   private _onDidChangeChats = new vscode.EventEmitter<void>();
   public readonly onDidChangeChats = this._onDidChangeChats.event;
 
@@ -39,9 +37,8 @@ export class APIService {
   // Map to track ongoing requests by chatId
   private activeRequests: Map<string, AbortController> = new Map();
 
-  constructor(storage: vscode.Memento, pastChatsProvider: HistoryPanel) {
+  constructor(storage: vscode.Memento) {
     this.storage = storage;
-    this.pastChatsProvider = pastChatsProvider;
     this.initializeAnthropicClient();
   }
 
@@ -113,18 +110,10 @@ export class APIService {
       context: context
     };
 
-    // Handle script attachments
+    // Unified script attachment handling
     if (scripts) {
-      if (Array.isArray(scripts)) {
-        userMessage.scripts = scripts;
-        // Also set the first script as the script property for backward compatibility
-        if (scripts.length > 0) {
-          userMessage.script = scripts[0];
-        }
-      } else {
-        userMessage.script = scripts;
-        userMessage.scripts = [scripts];
-      }
+      const normalizedScripts = Array.isArray(scripts) ? scripts : [scripts];
+      userMessage.scripts = normalizedScripts;
     }
 
     // Create a copy of the chat to avoid race conditions
@@ -159,20 +148,13 @@ export class APIService {
           // Create the base message
           const message: any = { role: msg.role, content: msg.content };
 
-          // Handle script attachments for user messages
-          if (msg.role === 'user') {
-            // Handle multiple scripts if available
-            if (msg.scripts && Array.isArray(msg.scripts) && msg.scripts.length > 0) {
-              let scriptsContent = '';
-              msg.scripts.forEach((script, index) => {
-                scriptsContent += `\n\n**Attached Script ${index + 1}: ${script.language}**\n\`\`\`${script.language}\n${script.content}\n\`\`\``;
-              });
-              message.content += scriptsContent;
-            }
-            // Handle single script (for backward compatibility)
-            else if (msg.script) {
-              message.content += `\n\n**Attached Script (${msg.script.language}):**\n\`\`\`${msg.script.language}\n${msg.script.content}\n\`\`\``;
-            }
+          // When processing messages for API:
+          if (msg.role === 'user' && msg.scripts && msg.scripts.length > 0) {
+            let scriptsContent = '';
+            msg.scripts.forEach((script, index) => {
+              scriptsContent += `\n\n**Script ${index + 1}: ${script.language}**\n\`\`\`${script.language}\n${script.content}\n\`\`\``;
+            });
+            message.content += scriptsContent;
           }
 
           return message;
@@ -216,7 +198,7 @@ export class APIService {
       try {
         for await (const chunk of stream) {
           // Check if the request has been aborted
-          if (isAborted) {
+          if (isAborted || abortController.signal.aborted) {
             console.log('Stream processing aborted');
             break;
           }
@@ -253,13 +235,14 @@ export class APIService {
           }
         }
       } catch (streamError: unknown) {
-        // If the request was aborted, handle it gracefully
-        if (isAborted) {
+        // Check if the error is an AbortError
+        if (streamError instanceof Error &&
+          (streamError.name === 'AbortError' || isAborted || abortController.signal.aborted)) {
           console.log('Request was cancelled during stream processing');
           this.activeRequests.delete(chatId);
           return undefined;
         }
-        // Re-throw other errors to be caught by the outer try-catch
+        // Re-throw other errors
         throw streamError;
       }
 
@@ -322,6 +305,9 @@ export class APIService {
   }
 
   public async createChat(): Promise<Chat> {
+    // Clear all existing chats since they're no longer accessible
+    await this.storage.update('codabra-chats', []);
+    
     const chat: Chat = {
       id: this.generateUniqueId(),
       title: 'New Chat',
@@ -330,7 +316,12 @@ export class APIService {
       updatedAt: Date.now()
     };
 
-    await this.updateChat(chat);
+    // Add the new chat to storage
+    const chats = this.storage.get<Chat[]>('codabra-chats', []);
+    chats.push(chat);
+    await this.storage.update('codabra-chats', chats);
+    this._onDidChangeChats.fire();
+    
     return chat;
   }
 
@@ -340,11 +331,6 @@ export class APIService {
     return chats.find(chat => chat.id === chatId);
   }
 
-  public async getAllChats(): Promise<Chat[]> {
-    const chats = this.storage.get<Chat[]>('codabra-chats', []);
-    // Sort chats by updatedAt (most recent first)
-    return [...chats].sort((a, b) => b.updatedAt - a.updatedAt);
-  }
 
   public async updateChat(chat: Chat): Promise<void> {
     // Get all chats (unsorted) directly from storage
@@ -359,17 +345,8 @@ export class APIService {
     // Save the updated chats to storage
     await this.storage.update('codabra-chats', chats);
     this._onDidChangeChats.fire();
-    this.pastChatsProvider.refresh();
   }
 
-  public async deleteChat(chatId: string): Promise<void> {
-    // Get all chats (unsorted) directly from storage
-    const chats = this.storage.get<Chat[]>('codabra-chats', []);
-    // Filter out the chat to delete
-    await this.storage.update('codabra-chats', chats.filter(chat => chat.id !== chatId));
-    this._onDidChangeChats.fire();
-    this.pastChatsProvider.refresh();
-  }
 
   public async chatExists(chatId: string): Promise<boolean> {
     // Get all chats (unsorted) directly from storage

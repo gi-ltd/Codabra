@@ -39,6 +39,7 @@ export class ContextUsageTracker {
         this.updateContextUsage();
 
         // Set up interval to update context usage every 5 seconds
+        // Use ResourceManager instead of direct setInterval
         this._updateIntervalId = ResourceManager.setInterval(() => this.updateContextUsage(), 5000);
     }
 

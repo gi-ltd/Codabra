@@ -2,6 +2,11 @@
 
 All notable changes to the "Codabra" extension will be documented in this file.
 
+## [1.0.6] - 2025-04-18
+
+### Removed
+- Chat history
+
 ## [1.0.5] - 2025-04-18
 
 ### Changed
