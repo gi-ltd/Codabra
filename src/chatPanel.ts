@@ -41,7 +41,7 @@ export class ChatPanel {
     // Otherwise, create a new panel
     this._panel = vscode.window.createWebviewPanel(
       ChatPanel.viewType,
-      'Codabra Chat',
+      'Codabra',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
