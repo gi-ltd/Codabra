@@ -201,10 +201,42 @@ body {
     word-break: break-word;
 }
 
+/* Script attachment in messages */
+.message-script-attachment {
+    margin-top: 10px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.message-script-header {
+    padding: 5px 10px;
+    background-color: var(--vscode-editor-lineHighlightBackground);
+    border-bottom: 1px solid var(--vscode-input-border);
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.message-script-content {
+    margin: 0;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    font-family: var(--vscode-editor-font-family);
+    font-size: 0.9em;
+}
+
 .input-container {
     display: flex;
+    flex-direction: column;
     padding: 10px;
     border-top: 1px solid var(--vscode-panel-border);
+}
+
+.message-input-row {
+    display: flex;
+    width: 100%;
 }
 
 .message-input {
@@ -217,6 +249,94 @@ body {
     height: 36px;
     line-height: 36px;
     box-sizing: border-box;
+}
+
+#scripts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.script-attachment-container {
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    overflow: hidden;
+}
+
+.script-attachment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 10px;
+    background-color: var(--vscode-editor-lineHighlightBackground);
+    border-bottom: 1px solid var(--vscode-input-border);
+    font-size: 0.9em;
+}
+
+.script-content {
+    margin: 0;
+    padding: 10px;
+    max-height: 150px;
+    overflow-y: auto;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 0.9em;
+    white-space: pre;
+}
+
+.remove-script-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    opacity: 0.7;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-script-button:hover {
+    opacity: 1;
+    color: var(--vscode-errorForeground);
+}
+
+.add-another-script-button {
+    align-self: flex-start;
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.add-another-script-button:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.attach-script-button {
+    margin-left: 10px;
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.attach-script-button:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
 }
 
 .send-button {

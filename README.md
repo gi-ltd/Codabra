@@ -6,6 +6,7 @@
 
 - **AI-Powered Coding Assistant**: Leverage Claude's advanced capabilities to help with coding tasks, debugging, and best practices
 - **Clean Chat Interface**: Interact with Claude through a simple, intuitive chat panel in the VSCode sidebar
+- **Script Attachments**: Attach code from your active editor to your messages for more targeted assistance
 - **Markdown Support**: View responses with proper formatting, syntax highlighting, and code blocks
 - **Chat History**: Access and manage your past conversations
 - **Context-Aware**: Automatically includes relevant editor context with your queries
@@ -21,7 +22,7 @@
 
 ## Requirements
 
-- Visual Studio Code version 1.99.0 or higher
+- Visual Studio Code version 1.60.0 or higher
 - An Anthropic API key with access to Claude models
 
 ## Usage
@@ -31,6 +32,29 @@
 1. Click the Codabra icon in the activity bar to open the sidebar
 2. Click the "+" icon to start a new chat, or use the keyboard shortcut `Ctrl+Shift+A` (`Cmd+Shift+A` on Mac)
 3. Type your question or request in the input field and press Enter
+
+### Attaching Scripts
+
+1. Open a file in the editor that contains code you want to discuss
+2. Click the paperclip icon next to the message input field
+3. The content of the active editor will be attached to your message
+4. To attach additional files, click the "Add Another Script" button that appears
+   - This will open a file picker dialog allowing you to select any file from your system
+5. Type your question about the code and send the message
+6. All attached scripts will be displayed with your message and included in Claude's context
+
+If no active editor is found, Codabra will:
+1. Try to use content from any visible editor
+2. If no editor is available, prompt you to open a file
+3. Provide a manual input option where you can paste or type code directly
+
+The file picker dialog allows you to select files from anywhere on your system, not just open editors, making it easy to discuss multiple related files even if they're not currently open.
+
+This feature is particularly useful when you need to discuss multiple related files, such as:
+- A component and its stylesheet
+- A class and its test file
+- A frontend component and its backend API
+- Multiple files that work together in a complex feature
 
 ### Viewing Chat History
 

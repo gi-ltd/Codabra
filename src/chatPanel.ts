@@ -65,7 +65,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
         case 'sendMessage':
-          await this._chatManager.sendMessage(message.text);
+          await this._chatManager.sendMessage(message.text, message.script);
+          break;
+        case 'getActiveEditorContent':
+          this.sendActiveEditorContent();
+          break;
+        case 'selectFileForScript':
+          this.selectFileForScript();
           break;
         case 'newChat':
           await this._chatManager.createNewChat();
@@ -134,6 +140,108 @@ export class ChatPanel implements vscode.WebviewViewProvider {
    */
   public updateContextUsage(used: number, total: number = 200000): void {
     return this._contextUsageTracker.updateContextUsage(used, total);
+  }
+
+  /**
+   * Sends the active editor content to the webview
+   */
+  private sendActiveEditorContent(): void {
+    // Try to get the active text editor
+    const editor = vscode.window.activeTextEditor;
+    
+    if (editor && editor.document) {
+      const document = editor.document;
+      const content = document.getText();
+      const language = document.languageId;
+      
+      this._webviewManager.postMessage({
+        command: 'activeEditorContent',
+        content: content,
+        language: language
+      });
+    } else {
+      // If no active editor is found, try to get content from the visible editors
+      const visibleEditors = vscode.window.visibleTextEditors;
+      if (visibleEditors && visibleEditors.length > 0) {
+        // Use the first visible editor
+        const firstEditor = visibleEditors[0];
+        const document = firstEditor.document;
+        const content = document.getText();
+        const language = document.languageId;
+        
+        this._webviewManager.postMessage({
+          command: 'activeEditorContent',
+          content: content,
+          language: language
+        });
+      } else {
+        // If still no editor is found, show a more helpful message
+        vscode.window.showInformationMessage('No active editor found. Please open a file to attach its content.');
+        
+        // Optionally, we could also add a command to open a file picker
+        vscode.commands.executeCommand('workbench.action.files.openFile')
+          .then(() => {
+            // After the file is opened, try again after a short delay
+            setTimeout(() => this.sendActiveEditorContent(), 500);
+          });
+      }
+    }
+  }
+  
+  /**
+   * Opens a file picker and sends the selected file content to the webview
+   */
+  private async selectFileForScript(): Promise<void> {
+    try {
+      // Show file picker dialog
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: 'Select File to Attach',
+        filters: {
+          'All Files': ['*']
+        }
+      });
+      
+      if (fileUris && fileUris.length > 0) {
+        // Read the selected file
+        const fileUri = fileUris[0];
+        const document = await vscode.workspace.openTextDocument(fileUri);
+        const content = document.getText();
+        const language = document.languageId;
+        
+        // Send the file content to the webview
+        this._webviewManager.postMessage({
+          command: 'activeEditorContent',
+          content: content,
+          language: language
+        });
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error selecting file: ${error}`);
+      
+      // Fallback to manual input
+      const manualInput = await vscode.window.showInputBox({
+        prompt: 'No file selected. You can manually enter a language for your code:',
+        placeHolder: 'javascript, python, typescript, etc.'
+      });
+      
+      if (manualInput) {
+        // Show input box for code content
+        const codeContent = await vscode.window.showInputBox({
+          prompt: 'Enter your code:',
+          placeHolder: 'Paste or type your code here'
+          // Note: VSCode's standard input box doesn't support multiline input
+        });
+        
+        if (codeContent) {
+          this._webviewManager.postMessage({
+            command: 'activeEditorContent',
+            content: codeContent,
+            language: manualInput
+          });
+        }
+      }
+    }
   }
 
   /**

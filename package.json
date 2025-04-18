@@ -2,7 +2,7 @@
   "name": "codabra",
   "displayName": "Codabra (Preview)",
   "description": "A simple, clean AI coding assistant",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "publisher": "GeneralIntelligenceLTD",
   "license": "MIT",
   "icon": "icon.png",
@@ -12,7 +12,7 @@
     "url": "https://github.com/gi-ltd/Codabra.git"
   },
   "engines": {
-    "vscode": "^1.99.0"
+    "vscode": "^1.60.0"
   },
   "keywords": [
     "ai",
@@ -156,7 +156,7 @@
     "@types/jsdom": "^21.1.6",
     "@types/marked": "^5.0.1",
     "@types/node": "^22.14.1",
-    "@types/vscode": "^1.99.1",
+    "@types/vscode": "^1.60.0",
     "typescript": "^5.8.3",
     "vscode-test": "^1.6.1"
   },

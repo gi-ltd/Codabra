@@ -3,11 +3,18 @@ import Anthropic from '@anthropic-ai/sdk';
 import { HistoryPanel } from './historyPanel';
 import { handleError, ErrorType } from './utils/errorHandler';
 
+export interface ScriptAttachment {
+  content: string;
+  language: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   context?: string; // Optional context from editor
+  script?: ScriptAttachment; // Optional script attachment (for backward compatibility)
+  scripts?: ScriptAttachment[]; // Optional multiple script attachments
 }
 
 export interface Chat {
@@ -78,9 +85,10 @@ export class APIService {
    * @param chatId The ID of the chat to send the message to
    * @param message The message to send
    * @param context Optional context from the editor
+   * @param scripts Optional script attachments
    * @returns The assistant's response message, or undefined if there was an error
    */
-  public async sendMessage(chatId: string, message: string, context?: string): Promise<ChatMessage | undefined> {
+  public async sendMessage(chatId: string, message: string, context?: string, scripts?: ScriptAttachment[] | ScriptAttachment): Promise<ChatMessage | undefined> {
     // Cancel any existing request for this chat
     this.cancelRequest(chatId);
 
@@ -106,6 +114,20 @@ export class APIService {
       timestamp: Date.now(),
       context: context
     };
+    
+    // Handle script attachments
+    if (scripts) {
+      if (Array.isArray(scripts)) {
+        userMessage.scripts = scripts;
+        // Also set the first script as the script property for backward compatibility
+        if (scripts.length > 0) {
+          userMessage.script = scripts[0];
+        }
+      } else {
+        userMessage.script = scripts;
+        userMessage.scripts = [scripts];
+      }
+    }
 
     // Create a copy of the chat to avoid race conditions
     const updatedChat: Chat = {
@@ -135,7 +157,28 @@ export class APIService {
 
       const requestOptions: any = {
         model: 'claude-3-7-sonnet-latest',
-        messages: updatedChat.messages.map(msg => ({ role: msg.role, content: msg.content })),
+        messages: updatedChat.messages.map(msg => {
+          // Create the base message
+          const message: any = { role: msg.role, content: msg.content };
+          
+          // Handle script attachments for user messages
+          if (msg.role === 'user') {
+            // Handle multiple scripts if available
+            if (msg.scripts && Array.isArray(msg.scripts) && msg.scripts.length > 0) {
+              let scriptsContent = '';
+              msg.scripts.forEach((script, index) => {
+                scriptsContent += `\n\n**Attached Script ${index + 1}: ${script.language}**\n\`\`\`${script.language}\n${script.content}\n\`\`\``;
+              });
+              message.content += scriptsContent;
+            }
+            // Handle single script (for backward compatibility)
+            else if (msg.script) {
+              message.content += `\n\n**Attached Script (${msg.script.language}):**\n\`\`\`${msg.script.language}\n${msg.script.content}\n\`\`\``;
+            }
+          }
+          
+          return message;
+        }),
         temperature: 1,
         max_tokens: 64000,
         system: systemPrompt,
@@ -397,27 +440,9 @@ export class APIService {
         return this.countTokens(chatId, retryCount + 1);
       }
 
-      // After retries are exhausted, fall back to estimation
-      console.log(`Falling back to token estimation for chat ${chatId} after ${retryCount} retries`);
-
-      // Improved estimation based on character count
-      // Claude typically uses ~4 characters per token on average
-      const estimatedTokens = chat.messages.reduce((total, msg) => {
-        // Count characters in the message content
-        const charCount = msg.content.length;
-
-        // Add overhead for message metadata (role, etc.)
-        const overhead = 10; // Tokens for message metadata
-
-        // Estimate tokens based on character count (approx. 4 chars per token)
-        return total + overhead + Math.ceil(charCount / 4);
-      }, 0);
-
-      // Add system prompt estimation
-      const systemPrompt = vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || '';
-      const systemPromptTokens = Math.ceil(systemPrompt.length / 4);
-
-      return estimatedTokens + systemPromptTokens;
+      // After retries are exhausted, return undefined
+      console.log(`Failed to count tokens for chat ${chatId} after ${retryCount} retries`);
+      return undefined;
     }
   }
 

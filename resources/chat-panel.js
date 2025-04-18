@@ -47,6 +47,9 @@
 
     // State
     let currentChat = null;
+    let attachedScripts = [];
+    const scriptsContainer = document.getElementById('scripts-container');
+    const attachScriptButton = document.getElementById('attach-script-button');
 
     // Initialize
     messageInput.focus();
@@ -63,6 +66,156 @@
 
     // Send message when Send button is clicked
     sendButton.addEventListener('click', sendMessage);
+
+    // Attach script button click handler
+    attachScriptButton.addEventListener('click', function() {
+        // Request the active editor content from the extension
+        vscode.postMessage({ command: 'getActiveEditorContent' });
+        
+        // Set up a fallback in case no editor is found
+        // If after 1 second no script is attached, show a manual input option
+        setTimeout(() => {
+            if (attachedScripts.length === 0) {
+                const manualInput = window.prompt('No active editor found. You can manually enter code here:', '');
+                if (manualInput) {
+                    // Default to JavaScript if language can't be determined
+                    addScriptAttachment(manualInput, 'javascript');
+                }
+            }
+        }, 1000);
+    });
+
+    // Function to create a script attachment element
+    function createScriptElement(script, language, index) {
+        const scriptContainer = document.createElement('div');
+        scriptContainer.className = 'script-attachment-container';
+        scriptContainer.dataset.index = index;
+        
+        const scriptHeader = document.createElement('div');
+        scriptHeader.className = 'script-attachment-header';
+        
+        const scriptTitle = document.createElement('span');
+        scriptTitle.textContent = `Script ${index + 1}: ${language}`;
+        
+        const removeButton = document.createElement('button');
+        removeButton.className = 'remove-script-button';
+        removeButton.title = 'Remove script';
+        removeButton.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        `;
+        
+        // Add click event to remove this specific script
+        removeButton.addEventListener('click', function() {
+            removeScriptAttachment(index);
+        });
+        
+        scriptHeader.appendChild(scriptTitle);
+        scriptHeader.appendChild(removeButton);
+        
+        const scriptContent = document.createElement('pre');
+        scriptContent.className = 'script-content';
+        scriptContent.textContent = script;
+        
+        // Add syntax highlighting if language is available
+        if (language && hljs.getLanguage(language)) {
+            const codeElement = document.createElement('code');
+            codeElement.className = `language-${language}`;
+            codeElement.textContent = script;
+            
+            // Apply syntax highlighting
+            hljs.highlightElement(codeElement);
+            
+            // Clear and append the highlighted code
+            scriptContent.innerHTML = '';
+            scriptContent.appendChild(codeElement);
+        }
+        
+        scriptContainer.appendChild(scriptHeader);
+        scriptContainer.appendChild(scriptContent);
+        
+        return scriptContainer;
+    }
+    
+    // Function to add a script attachment
+    function addScriptAttachment(script, language) {
+        // Add to the scripts array
+        attachedScripts.push({ content: script, language: language });
+        
+        // Create the script element
+        const scriptElement = createScriptElement(script, language, attachedScripts.length - 1);
+        
+        // Add to the container
+        scriptsContainer.appendChild(scriptElement);
+        
+        // Add "Add Another Script" button if it doesn't exist and this is the first script
+        if (attachedScripts.length === 1) {
+            addAnotherScriptButton();
+        }
+    }
+    
+    // Function to add the "Add Another Script" button
+    function addAnotherScriptButton() {
+        // Check if button already exists
+        if (document.getElementById('add-another-script-button')) {
+            return;
+        }
+        
+        const addButton = document.createElement('button');
+        addButton.id = 'add-another-script-button';
+        addButton.className = 'add-another-script-button';
+        addButton.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Add Another Script
+        `;
+        
+        // Add click event to add another script
+        addButton.addEventListener('click', function() {
+            // Request to select a different file
+            vscode.postMessage({ command: 'selectFileForScript' });
+        });
+        
+        scriptsContainer.appendChild(addButton);
+    }
+    
+    // Function to remove a script attachment
+    function removeScriptAttachment(index) {
+        // Remove from the array
+        attachedScripts.splice(index, 1);
+        
+        // Rebuild the UI
+        updateScriptAttachmentsUI();
+    }
+    
+    // Function to update the script attachments UI
+    function updateScriptAttachmentsUI() {
+        // Clear the container
+        scriptsContainer.innerHTML = '';
+        
+        // Add each script
+        attachedScripts.forEach((script, index) => {
+            const scriptElement = createScriptElement(script.content, script.language, index);
+            scriptsContainer.appendChild(scriptElement);
+        });
+        
+        // Add the "Add Another Script" button if there are scripts
+        if (attachedScripts.length > 0) {
+            addAnotherScriptButton();
+        }
+    }
+    
+    // Function to clear all script attachments
+    function clearAllScriptAttachments() {
+        attachedScripts = [];
+        scriptsContainer.innerHTML = '';
+    }
 
     // Save settings
     saveSettingsButton.addEventListener('click', () => {
@@ -86,13 +239,28 @@
     function sendMessage() {
         const text = messageInput.value.trim();
         if (text) {
-            vscode.postMessage({ command: 'sendMessage', text: text });
+            // Create message object
+            const messageData = {
+                command: 'sendMessage',
+                text: text
+            };
+            
+            // Add script attachments if present
+            if (attachedScripts.length > 0) {
+                messageData.scripts = attachedScripts;
+            }
+            
+            // Send message to extension
+            vscode.postMessage(messageData);
+            
+            // Clear input and script attachments
             messageInput.value = '';
+            clearAllScriptAttachments();
         }
     }
 
     // Add message to chat
-    function addMessage(content, role) {
+    function addMessage(content, role, scripts) {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${role}-message`;
 
@@ -106,16 +274,63 @@
             contentElement.innerHTML = marked.parse(normalizedContent);
 
             contentElement.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block)); // Apply syntax highlighting to code blocks
+            
+            messageElement.appendChild(contentElement);
         } else { // For user messages, just use text
             contentElement.className = 'message-content';
             contentElement.textContent = content;
+            messageElement.appendChild(contentElement);
+            
+            // Handle script attachments
+            if (scripts) {
+                // If scripts is an array, handle multiple scripts
+                if (Array.isArray(scripts)) {
+                    scripts.forEach((script, index) => {
+                        addScriptToMessage(messageElement, script, index);
+                    });
+                } 
+                // If scripts is a single object, handle it as a single script (for backward compatibility)
+                else if (typeof scripts === 'object' && scripts.content) {
+                    addScriptToMessage(messageElement, scripts, 0);
+                }
+            }
         }
-
-        messageElement.appendChild(contentElement);
+        
         chatContainer.appendChild(messageElement);
-
+        
         // Scroll to bottom
         chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    // Helper function to add a script to a message
+    function addScriptToMessage(messageElement, script, index) {
+        const scriptElement = document.createElement('div');
+        scriptElement.className = 'message-script-attachment';
+        
+        const scriptHeader = document.createElement('div');
+        scriptHeader.className = 'message-script-header';
+        scriptHeader.textContent = Array.isArray(attachedScripts) && attachedScripts.length > 1 ? 
+            `Attached Script ${index + 1}: ${script.language}` : 
+            `Attached Script (${script.language}):`;
+        
+        const scriptContent = document.createElement('pre');
+        scriptContent.className = 'message-script-content';
+        
+        const codeElement = document.createElement('code');
+        if (script.language && hljs.getLanguage(script.language)) {
+            codeElement.className = `language-${script.language}`;
+        }
+        codeElement.textContent = script.content;
+        
+        // Apply syntax highlighting
+        hljs.highlightElement(codeElement);
+        
+        scriptContent.appendChild(codeElement);
+        scriptElement.appendChild(scriptHeader);
+        scriptElement.appendChild(scriptContent);
+        
+        // Add the script element after the content element
+        messageElement.appendChild(scriptElement);
     }
 
     // Function to update streaming content with markdown rendering
@@ -139,6 +354,13 @@
     // Handle messages from extension
     window.addEventListener('message', event => {
         switch (event.data.command) {
+            case 'activeEditorContent':
+                // Add the active editor content as a script attachment
+                if (event.data.content) {
+                    addScriptAttachment(event.data.content, event.data.language);
+                }
+                break;
+                
             case 'loadChat':
                 currentChat = event.data.chat;
                 chatContainer.innerHTML = '';
@@ -154,7 +376,7 @@
                 // Change justification to flex-start when loading a chat with messages
                 if (currentChat.messages.length > 0) {
                     chatContainer.style.justifyContent = 'flex-start';
-                    currentChat.messages.forEach(msg => addMessage(msg.content, msg.role));
+                    currentChat.messages.forEach(msg => addMessage(msg.content, msg.role, msg.script));
                 } else {
                     chatContainer.style.justifyContent = 'center'; // Reset justification to center for empty chats
                     showStartupMessageIfEmpty(); // Show startup message for empty chats
@@ -162,7 +384,7 @@
                 break;
 
             case 'addUserMessage':
-                addMessage(event.data.message, 'user');
+                addMessage(event.data.message, 'user', event.data.script);
                 break;
 
             case 'addAssistantMessage':
@@ -372,14 +594,14 @@
 
     // Modify addMessage to remove startup message before adding new messages
     const originalAddMessage = addMessage;
-    addMessage = function (content, role) {
+    addMessage = function (content, role, script) {
         if (document.getElementById('startup-message')) { // Remove startup message if it exists
             chatContainer.innerHTML = '';
             chatContainer.style.justifyContent = 'flex-start'; // Change justification to flex-start when messages are added
         }
 
         // Call the original addMessage function
-        originalAddMessage(content, role);
+        originalAddMessage(content, role, script);
     };
 
     // Function to update the context usage bar

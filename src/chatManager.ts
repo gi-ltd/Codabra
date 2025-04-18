@@ -131,7 +131,7 @@ export class ChatManager {
   /**
    * Sends a message to the current chat
    */
-  public async sendMessage(text: string): Promise<void> {
+  public async sendMessage(text: string, scripts?: { content: string; language: string }[] | { content: string; language: string }): Promise<void> {
     if (!this._webviewManager.view) {
       return;
     }
@@ -158,7 +158,11 @@ export class ChatManager {
         }
 
         // Update UI to show user message and start streaming state
-        this._webviewManager.postMessage({ command: 'addUserMessage', message: text });
+        this._webviewManager.postMessage({ 
+          command: 'addUserMessage', 
+          message: text,
+          script: scripts
+        });
         this._webviewManager.postMessage({ command: 'startStreaming' });
 
         // Set streaming flag
@@ -166,7 +170,7 @@ export class ChatManager {
 
         try {
           // Send the message and get response
-          const response = await this._apiService.sendMessage(this._currentChatId, text, context);
+          const response = await this._apiService.sendMessage(this._currentChatId, text, context, scripts);
 
           if (response) {
             // First end streaming UI state to remove the streaming message element

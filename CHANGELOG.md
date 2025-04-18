@@ -2,9 +2,28 @@
 
 All notable changes to the "Codabra" extension will be documented in this file.
 
+## [1.0.4] - 2025-04-18
+
+### Changed
+- Reduced minimum VSCode version requirement from 1.99.0 to 1.60.0 for better compatibility with older VSCode installations
+- Improved token counting by removing estimation fallback for more accurate context usage tracking
+
+## [1.0.3] - 2025-04-18
+
+### Added
+- Script attachment feature that allows users to attach code from the active editor to their messages
+- Support for attaching multiple scripts to a single message
+- File picker dialog for selecting additional files from anywhere on the system
+- UI for displaying attached scripts with syntax highlighting
+- "Add Another Script" button for attaching additional files
+- Improved message formatting to clearly show attached scripts
+- Enhanced editor detection to find content from any visible editor
+- Manual code input option when no editor is available
+- Automatic file picker prompt when no editor is found
+
 ## [1.0.2] - 2025-04-15
 
-- Fixes
+- Bug fixes and performance improvements
 
 ## [1.0.1] - 2025-04-14
 
