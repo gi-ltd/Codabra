@@ -2,7 +2,7 @@
   "name": "codabra",
   "displayName": "Codabra (Preview)",
   "description": "A simple, clean AI coding assistant",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "publisher": "GeneralIntelligenceLTD",
   "license": "MIT",
   "icon": "icon.png",
@@ -27,9 +27,7 @@
     "Programming Languages",
     "Machine Learning"
   ],
-  "activationEvents": [
-    "onView:codabra-sidebar"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -50,53 +48,33 @@
       }
     ],
     "menus": {
-      "view/title": [
-        {
-          "command": "codabra.showCurrentChat",
-          "when": "view == codabra-view && activeWebviewPanelId == 'settings-view' && codabra.hasCurrentChat",
-          "group": "navigation@1"
-        },
-        {
-          "command": "codabra.startChat",
-          "when": "view == codabra-view",
-          "group": "navigation@2"
-        },
-        {
-          "command": "codabra.openSettings",
-          "when": "view == codabra-view",
-          "group": "navigation@4"
-        }
-      ],
       "commandPalette": [
         {
           "command": "codabra.startChat"
-        }
-      ]
-    },
-    "viewsContainers": {
-      "activitybar": [
+        },
         {
-          "id": "codabra-sidebar",
-          "title": "Codabra",
-          "icon": "$(comment)"
-        }
-      ]
-    },
-    "views": {
-      "codabra-sidebar": [
+          "command": "codabra.openSettings"
+        },
         {
-          "id": "codabra-view",
-          "name": "Chat",
-          "type": "webview",
-          "icon": "$(comment-discussion)"
+          "command": "codabra.showCurrentChat"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "codabra.startChat",
+          "group": "navigation"
+        },
+        {
+          "command": "codabra.openSettings",
+          "group": "navigation"
         }
       ]
     },
     "keybindings": [
       {
         "command": "codabra.startChat",
-        "key": "ctrl+shift+a",
-        "mac": "cmd+shift+a"
+        "key": "ctrl+shift+z",
+        "mac": "cmd+shift+z"
       }
     ],
     "configuration": {

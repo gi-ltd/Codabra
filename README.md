@@ -28,8 +28,7 @@
 
 ### Starting a New Chat
 
-1. Click the Codabra icon in the activity bar to open the sidebar
-2. Click the "+" icon to start a new chat, or use the keyboard shortcut `Ctrl+Shift+A` (`Cmd+Shift+A` on Mac)
+2. Click the "+" icon to start a new chat, or use the keyboard shortcut `Ctrl+Shift+Z` (`Cmd+Shift+Z` on Mac)
 3. Type your question or request in the input field and press Enter
 
 ### Attaching Scripts
@@ -89,7 +88,6 @@ When you approach the context limit, consider starting a new chat to reset the c
 ## Privacy & Security
 
 - Your API key is stored locally in your VSCode settings
-- Chat history is stored locally in your VSCode global state
 - Code context is only shared with Anthropic's API when you send a message
 
 ## License
@@ -104,11 +102,18 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 Codabra follows a modular architecture with clear separation of concerns:
 
-- **WebviewManager**: Handles webview initialization and communication
+- **ApiService**: Manages communication with the Anthropic API
 - **ChatManager**: Manages chat operations (creating, loading, sending messages)
-- **SettingsManager**: Handles settings operations
+- **ChatPanel**: Coordinates between specialized components and handles UI rendering
 - **ContextUsageTracker**: Tracks and updates token usage
-- **ChatPanel**: Coordinates between specialized components
+- **SettingsManager**: Handles settings operations and configuration
+- **WebviewManager**: Handles webview initialization and communication
+- **Extension**: Main entry point that registers commands and activates components
+- **Utils**:
+  - **ErrorHandler**: Centralizes error handling and reporting
+  - **EventManager**: Manages custom events and subscriptions
+  - **LockManager**: Handles concurrency and prevents race conditions
+  - **ResourceManager**: Manages loading and disposal of resources
 
 This architecture makes the codebase more maintainable and easier to extend with new features.
 

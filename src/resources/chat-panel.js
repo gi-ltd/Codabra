@@ -68,19 +68,8 @@
     // Attach script button click handler
     attachScriptButton.addEventListener('click', function () {
         // Request the active editor content from the extension
+        // The extension will handle all fallback mechanisms
         vscode.postMessage({ command: 'getActiveEditorContent' });
-
-        // Set up a fallback in case no editor is found
-        // If after 1 second no script is attached, show a manual input option
-        setTimeout(() => {
-            if (attachedScripts.length === 0) {
-                const manualInput = window.prompt('No active editor found. You can manually enter code here:', '');
-                if (manualInput) {
-                    // Default to JavaScript if language can't be determined
-                    addScriptAttachment(manualInput, 'javascript');
-                }
-            }
-        }, 1000);
     });
 
     // Function to create a script attachment element
@@ -465,6 +454,7 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
     }
+
 
     // Handle messages from extension
     window.addEventListener('message', event => {

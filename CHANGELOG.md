@@ -2,6 +2,12 @@
 
 All notable changes to the "Codabra" extension will be documented in this file.
 
+## [1.0.7] - 2025-04-18
+
+### Changed
+- The extention now opens as a tab
+- Changed hotkey for opening chat from Ctrl+Shift+A to Ctrl+Shift+Z
+
 ## [1.0.6] - 2025-04-18
 
 ### Removed

@@ -75,12 +75,15 @@ export class ContextUsageTracker {
                 }
             }
 
-            // Send context usage update to the webview
-            this._webviewManager.postMessage({
-                command: 'updateContextUsage',
-                used: this._lastKnownTokenUsage,
-                total: total
-            });
+            // Only send update if webview is available
+            if (this._webviewManager.webview) {
+                // Send context usage update to the webview
+                this._webviewManager.postMessage({
+                    command: 'updateContextUsage',
+                    used: this._lastKnownTokenUsage,
+                    total: total
+                });
+            }
         } catch (error) {
             handleError(error, 'updating context usage', false);
         }

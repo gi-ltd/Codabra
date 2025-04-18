@@ -6,27 +6,20 @@ import { EventManager } from './utils/eventManager';
 import { LockManager } from './utils/lockManager';
 import { handleError } from './utils/errorHandler';
 
-let chatViewProvider: ChatPanel | undefined;
+let chatPanel: ChatPanel | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   try {
     // Initialize the chat panel
-    chatViewProvider = new ChatPanel(
+    chatPanel = new ChatPanel(
       context.extensionUri,
       new APIService(context.globalState)
     );
 
-    // Register the webview provider
-    const webviewProvider = vscode.window.registerWebviewViewProvider(ChatPanel.viewType, chatViewProvider);
-    context.subscriptions.push(webviewProvider);
-
-    // Register all disposables with ResourceManager for proper cleanup
-    ResourceManager.registerDisposable(webviewProvider);
-
     // Register commands
     const updateContextUsageCommand = vscode.commands.registerCommand('codabra.updateContextUsage', (used: number) => {
-      if (chatViewProvider) {
-        chatViewProvider.updateContextUsage(used, 200000);
+      if (chatPanel) {
+        chatPanel.updateContextUsage(used, 200000);
       }
     });
     context.subscriptions.push(updateContextUsageCommand);
@@ -35,19 +28,19 @@ export function activate(context: vscode.ExtensionContext) {
     // Register other commands
     const commands = [
       vscode.commands.registerCommand('codabra.startChat', async () => {
-        if (!chatViewProvider) return;
-        await vscode.commands.executeCommand('codabra-view.focus');
-        return chatViewProvider.createNewChat();
+        if (!chatPanel) return;
+        await chatPanel.createOrShowPanel();
+        return chatPanel.createNewChat();
       }),
       vscode.commands.registerCommand('codabra.openSettings', async () => {
-        if (!chatViewProvider) return;
-        await vscode.commands.executeCommand('codabra-view.focus');
-        chatViewProvider.sendSettings();
+        if (!chatPanel) return;
+        await chatPanel.createOrShowPanel();
+        chatPanel.sendSettings();
       }),
       vscode.commands.registerCommand('codabra.showCurrentChat', async () => {
-        if (!chatViewProvider) return;
-        await vscode.commands.executeCommand('codabra-view.focus');
-        chatViewProvider.showCurrentChat();
+        if (!chatPanel) return;
+        await chatPanel.createOrShowPanel();
+        chatPanel.showCurrentChat();
       })
     ];
 
@@ -63,10 +56,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   try {
-    // Dispose of the chat view provider
-    if (chatViewProvider) {
-      chatViewProvider.dispose();
-      chatViewProvider = undefined;
+    // Dispose of the chat panel
+    if (chatPanel) {
+      chatPanel.dispose();
+      chatPanel = undefined;
     }
 
     // Clean up all resources

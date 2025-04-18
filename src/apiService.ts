@@ -307,7 +307,7 @@ export class APIService {
   public async createChat(): Promise<Chat> {
     // Clear all existing chats since they're no longer accessible
     await this.storage.update('codabra-chats', []);
-    
+
     const chat: Chat = {
       id: this.generateUniqueId(),
       title: 'New Chat',
@@ -321,7 +321,7 @@ export class APIService {
     chats.push(chat);
     await this.storage.update('codabra-chats', chats);
     this._onDidChangeChats.fire();
-    
+
     return chat;
   }
 

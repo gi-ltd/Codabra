@@ -24,7 +24,7 @@ export class SettingsManager {
      * Loads and sends settings to the webview
      */
     public sendSettings(): void {
-        if (!this._webviewManager.view) {
+        if (!this._webviewManager.webview) {
             return;
         }
 

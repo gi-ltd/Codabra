@@ -19,7 +19,7 @@ export class ChatManager {
   ) {
     // Listen for changes to chats
     this._apiService.onDidChangeChats(() => {
-      if (this._currentChatId && this._webviewManager.view) {
+      if (this._currentChatId && this._webviewManager.webview) {
         if (this._isHandlingMessage && this._isStreaming) {
           // During streaming, we want to update the UI with the latest content
           // but we don't want to reload the entire chat
@@ -44,7 +44,7 @@ export class ChatManager {
    * Loads a chat by ID
    */
   public async loadChat(chatId: string): Promise<void> {
-    if (!this._webviewManager.view) {
+    if (!this._webviewManager.webview) {
       return;
     }
 
@@ -95,7 +95,7 @@ export class ChatManager {
    * Creates a new chat
    */
   public async createNewChat(): Promise<void> {
-    if (!this._webviewManager.view) {
+    if (!this._webviewManager.webview) {
       return;
     }
 
@@ -133,7 +133,7 @@ export class ChatManager {
    * Sends a message to the current chat
    */
   public async sendMessage(text: string, scripts?: { content: string; language: string }[] | { content: string; language: string }): Promise<void> {
-    if (!this._webviewManager.view) {
+    if (!this._webviewManager.webview) {
       return;
     }
 
@@ -221,7 +221,7 @@ export class ChatManager {
    * This is called when a chat update is received during streaming
    */
   private async updateStreamingContent(): Promise<void> {
-    if (!this._currentChatId || !this._isStreaming || !this._webviewManager.view) {
+    if (!this._currentChatId || !this._isStreaming || !this._webviewManager.webview) {
       return;
     }
 
@@ -251,7 +251,7 @@ export class ChatManager {
    * Shows the current chat view
    */
   public async showCurrentChat(): Promise<void> {
-    if (!this._webviewManager.view) {
+    if (!this._webviewManager.webview) {
       return;
     }
 
@@ -315,7 +315,7 @@ export class ChatManager {
    * Updates the context usage display
    */
   public updateContextUsage(used: number, total: number = 200000): void {
-    if (!this._webviewManager.view) {
+    if (!this._webviewManager.webview) {
       return;
     }
 

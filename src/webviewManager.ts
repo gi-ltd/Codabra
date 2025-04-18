@@ -5,11 +5,17 @@ import { handleError } from './utils/errorHandler';
 
 export class WebviewManager {
   private _view?: vscode.WebviewView;
+  private _panel?: vscode.WebviewPanel;
+  public disposables: vscode.Disposable[] = [];
 
   constructor(private readonly _extensionUri: vscode.Uri) { }
 
   public get view(): vscode.WebviewView | undefined {
     return this._view;
+  }
+
+  public get webview(): vscode.Webview | undefined {
+    return this._panel?.webview || this._view?.webview;
   }
 
   public async initialize(webviewView: vscode.WebviewView): Promise<void> {
@@ -23,16 +29,30 @@ export class WebviewManager {
     await this.updateWebviewContent(webviewView.webview);
   }
 
+  public async initializePanel(panel: vscode.WebviewPanel): Promise<void> {
+    this._panel = panel;
+
+    panel.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'src/resources')]
+    };
+
+    await this.updateWebviewContent(panel.webview);
+  }
+
   public postMessage(message: any): Thenable<boolean> {
-    if (!this._view) {
-      return Promise.resolve(false);
+    if (this._panel) {
+      // Use the simplified EventManager to handle debouncing
+      EventManager.postMessageToWebview(this._panel.webview, message);
+      return Promise.resolve(true);
+    } else if (this._view) {
+      // Use the simplified EventManager to handle debouncing
+      EventManager.postMessageToWebview(this._view.webview, message);
+      return Promise.resolve(true);
     }
 
-    // Use the simplified EventManager to handle debouncing
-    EventManager.postMessageToWebview(this._view.webview, message);
-
     // Return a resolved promise since the actual message might be sent after debounce
-    return Promise.resolve(true);
+    return Promise.resolve(false);
   }
 
   /**
