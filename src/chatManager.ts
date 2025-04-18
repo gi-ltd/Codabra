@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { APIService, ChatMessage } from './apiService';
+import { APIService } from './apiService';
 import { WebviewManager } from './webviewManager';
 import { LockManager } from './utils/lockManager';
 import { EventManager } from './utils/eventManager';
@@ -158,8 +158,8 @@ export class ChatManager {
         }
 
         // Update UI to show user message and start streaming state
-        this._webviewManager.postMessage({ 
-          command: 'addUserMessage', 
+        this._webviewManager.postMessage({
+          command: 'addUserMessage',
           message: text,
           script: scripts
         });
@@ -241,7 +241,8 @@ export class ChatManager {
         }
       }
     } catch (error) {
-      console.error('Error updating streaming content:', error);
+      // Use standardized error handling but don't show to user
+      handleError(error, 'updating streaming content', false);
     }
   }
 
@@ -313,24 +314,35 @@ export class ChatManager {
       return;
     }
 
-    // Cancel the API request
-    const cancelled = this._apiService.cancelRequest(this._currentChatId);
+    try {
+      // Cancel the API request
+      const cancelled = this._apiService.cancelRequest(this._currentChatId);
 
-    if (cancelled) {
-      console.log(`Cancelled streaming for chat ${this._currentChatId}`);
+      if (cancelled) {
+        console.log(`Cancelled streaming for chat ${this._currentChatId}`);
 
-      // Update the UI to show the cancellation
+        // Update the UI to show the cancellation
+        this._webviewManager.postMessage({
+          command: 'endStreaming',
+          cancelled: true
+        });
+
+        // Load the chat to show the cancelled message
+        this.loadChat(this._currentChatId);
+      }
+    } catch (error) {
+      // Handle any errors during cancellation
+      handleError(error, 'cancelling streaming', false);
+
+      // Ensure UI is updated even if cancellation fails
       this._webviewManager.postMessage({
         command: 'endStreaming',
         cancelled: true
       });
-
-      // Load the chat to show the cancelled message
-      this.loadChat(this._currentChatId);
+    } finally {
+      // Always reset streaming flag
+      this._isStreaming = false;
     }
-
-    // Reset streaming flag
-    this._isStreaming = false;
   }
 
   /**

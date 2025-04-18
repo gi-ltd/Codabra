@@ -29,20 +29,11 @@ export class WebviewManager {
       return Promise.resolve(false);
     }
 
-    if (message.command && EventManager.DEBOUNCE_COMMANDS.includes(message.command)) {
-      // Use EventManager to debounce specific commands
-      EventManager.debounce(`webview-message-${message.command}`, () => {
-        if (this._view) {
-          this._view.webview.postMessage(message);
-        }
-      }, 100);
+    // Use the simplified EventManager to handle debouncing
+    EventManager.postMessageToWebview(this._view.webview, message);
 
-      // Return a resolved promise since the actual message will be sent after debounce
-      return Promise.resolve(true);
-    } else {
-      // For other commands, post immediately
-      return this._view.webview.postMessage(message);
-    }
+    // Return a resolved promise since the actual message might be sent after debounce
+    return Promise.resolve(true);
   }
 
   /**
@@ -85,8 +76,7 @@ export class WebviewManager {
   }
 
   /**
-   * Safely injects CSS and JS content into HTML using DOM parsing
-   * This is more robust than regex-based replacement
+   * Injects CSS and JS content into HTML using a simple regex approach
    * @param html The HTML template
    * @param styleId The ID of the style tag
    * @param scriptId The ID of the script tag
@@ -102,52 +92,53 @@ export class WebviewManager {
     jsContent: string
   ): string {
     try {
-      // Create a DOM parser
-      const dom = new JSDOM(html);
-      const document = dom.window.document;
+      // Use regex to find and replace the content between the style and script tags
+      const styleRegex = new RegExp(`(<style\\s+id=["']${styleId}["'][^>]*>)(.*?)(<\\/style>)`, 'is');
+      const scriptRegex = new RegExp(`(<script\\s+id=["']${scriptId}["'][^>]*>)(.*?)(<\\/script>)`, 'is');
 
-      // Find the style tag by ID
-      const styleTag = document.getElementById(styleId);
-      if (!styleTag) {
-        throw new Error(`Style tag with id="${styleId}" not found in HTML template`);
+      // Replace the content between the tags
+      let processedHtml = html
+        .replace(styleRegex, `$1${cssContent}$3`)
+        .replace(scriptRegex, `$1${jsContent}$3`);
+
+      // Verify that the replacements were successful
+      if (!processedHtml.includes(cssContent) || !processedHtml.includes(jsContent)) {
+        throw new Error('Content injection failed: Could not find or replace style or script tags');
       }
 
-      // Find the script tag by ID
-      const scriptTag = document.getElementById(scriptId);
-      if (!scriptTag) {
-        throw new Error(`Script tag with id="${scriptId}" not found in HTML template`);
-      }
-
-      // Update the content
-      styleTag.textContent = cssContent;
-      scriptTag.textContent = jsContent;
-
-      // Serialize the document back to HTML
-      return dom.serialize();
+      return processedHtml;
     } catch (error) {
-      console.error('Error using DOM parser, falling back to regex-based replacement:', error);
+      console.error('Error injecting content:', error);
 
-      // Fallback to regex-based replacement if DOM parsing fails
-      // Find the style tag
-      const styleTagRegex = new RegExp(`<style\\s+[^>]*id=["']${styleId}["'][^>]*>([\\s\\S]*?)<\\/style>`, 'i');
-      const styleMatch = html.match(styleTagRegex);
+      // Fallback to a simpler approach if the regex fails
+      const styleTagStart = `<style id="${styleId}">`;
+      const styleTagEnd = `</style>`;
+      const scriptTagStart = `<script id="${scriptId}">`;
+      const scriptTagEnd = `</script>`;
 
-      if (!styleMatch) {
-        throw new Error(`Style tag with id="${styleId}" not found in HTML template`);
+      // Check if the tags exist in the HTML
+      if (!html.includes(styleTagStart) || !html.includes(scriptTagStart)) {
+        throw new Error(`Failed to inject content: Could not find style or script tags with IDs ${styleId} and ${scriptId}`);
       }
 
-      // Find the script tag
-      const scriptTagRegex = new RegExp(`<script\\s+[^>]*id=["']${scriptId}["'][^>]*>([\\s\\S]*?)<\\/script>`, 'i');
-      const scriptMatch = html.match(scriptTagRegex);
+      // Find positions to do targeted replacements
+      const styleStartPos = html.indexOf(styleTagStart) + styleTagStart.length;
+      const styleEndPos = html.indexOf(styleTagEnd, styleStartPos);
+      const scriptStartPos = html.indexOf(scriptTagStart) + scriptTagStart.length;
+      const scriptEndPos = html.indexOf(scriptTagEnd, scriptStartPos);
 
-      if (!scriptMatch) {
-        throw new Error(`Script tag with id="${scriptId}" not found in HTML template`);
+      if (styleStartPos === -1 || styleEndPos === -1 || scriptStartPos === -1 || scriptEndPos === -1) {
+        throw new Error('Failed to find tag positions for content injection');
       }
 
-      // Replace the content of the style tag
-      return html
-        .replace(styleMatch[0], `<style id="${styleId}">${cssContent}</style>`)
-        .replace(scriptMatch[0], `<script id="${scriptId}">${jsContent}</script>`);
+      // Replace the content between the tags
+      let result = html.substring(0, styleStartPos) +
+        cssContent +
+        html.substring(styleEndPos, scriptStartPos) +
+        jsContent +
+        html.substring(scriptEndPos);
+
+      return result;
     }
   }
 }

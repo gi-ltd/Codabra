@@ -23,13 +23,6 @@ export interface AppError {
 }
 
 /**
- * Creates a standardized error object
- */
-export function createError(type: ErrorType, message: string, originalError?: unknown): AppError {
-    return { type, message, originalError };
-}
-
-/**
  * Handles errors in a standardized way across the application
  * @param error The error to handle
  * @param context Optional context information about where the error occurred
@@ -38,59 +31,43 @@ export function createError(type: ErrorType, message: string, originalError?: un
 export function handleError(error: unknown, context: string = '', showToUser: boolean = true): AppError {
     console.error(`Error ${context ? 'in ' + context : ''}:`, error);
 
-    let appError: AppError;
+    // Extract error message
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Determine the type of error
-    if (error instanceof TypeError && error.message.includes('network')) {
-        appError = createError(
-            ErrorType.NETWORK,
-            'Network error: Please check your internet connection',
-            error
-        );
-    } else if (typeof error === 'object' && error !== null && 'status' in error) {
-        const statusError = error as { status: number };
-        if (statusError.status === 429) {
-            appError = createError(
-                ErrorType.RATE_LIMIT,
-                'Rate limit exceeded: Please try again later',
-                error
-            );
-        } else if (statusError.status >= 500) {
-            appError = createError(
-                ErrorType.SERVER,
-                'Server error: Please try again later',
-                error
-            );
-        } else if (statusError.status === 404) {
-            appError = createError(
-                ErrorType.NOT_FOUND,
-                'Resource not found',
-                error
-            );
-        } else if (statusError.status === 401 || statusError.status === 403) {
-            appError = createError(
-                ErrorType.API_KEY,
-                'Authentication error: Please check your API key',
-                error
-            );
-        } else {
-            appError = createError(
-                ErrorType.UNKNOWN,
-                `Error: ${error instanceof Error ? error.message : String(error)}`,
-                error
-            );
-        }
-    } else {
-        appError = createError(
-            ErrorType.UNKNOWN,
-            `Error: ${error instanceof Error ? error.message : String(error)}`,
-            error
-        );
+    // Determine error type and create appropriate message
+    let type = ErrorType.UNKNOWN;
+    let message = `Error: ${errorMessage}`;
+
+    // Handle network errors
+    if (error instanceof TypeError && errorMessage.includes('network')) {
+        type = ErrorType.NETWORK;
+        message = 'Network error: Please check your internet connection';
     }
+    // Handle HTTP status errors
+    else if (typeof error === 'object' && error !== null && 'status' in error) {
+        const status = (error as { status: number }).status;
+
+        if (status === 429) {
+            type = ErrorType.RATE_LIMIT;
+            message = 'Rate limit exceeded: Please try again later';
+        } else if (status >= 500) {
+            type = ErrorType.SERVER;
+            message = 'Server error: Please try again later';
+        } else if (status === 404) {
+            type = ErrorType.NOT_FOUND;
+            message = 'Resource not found';
+        } else if (status === 401 || status === 403) {
+            type = ErrorType.API_KEY;
+            message = 'Authentication error: Please check your API key';
+        }
+    }
+
+    // Create the standardized error object
+    const appError: AppError = { type, message, originalError: error };
 
     // Show error to user if requested
     if (showToUser) {
-        vscode.window.showErrorMessage(appError.message);
+        vscode.window.showErrorMessage(message);
     }
 
     return appError;

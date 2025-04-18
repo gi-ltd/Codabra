@@ -41,7 +41,7 @@ export class LockManager {
     public static release(resourceId: string): void {
         // Clear any timeout
         if (this.lockTimeouts.has(resourceId)) {
-            clearTimeout(this.lockTimeouts.get(resourceId));
+            clearTimeout(this.lockTimeouts.get(resourceId)!);
             this.lockTimeouts.delete(resourceId);
         }
 
@@ -58,12 +58,9 @@ export class LockManager {
         return !!this.locks.get(resourceId);
     }
 
-    // Queue of pending operations for each resource
-    private static pendingOperations: Map<string, Array<{ fn: () => Promise<any>, resolve: (value: any) => void, reject: (reason: any) => void }>> = new Map();
-
     /**
      * Executes a function with a lock
-     * If the lock can't be acquired, the function is queued and will be executed when the lock is released
+     * If the lock can't be acquired, it will retry with exponential backoff
      * @param resourceId A unique identifier for the resource
      * @param fn The function to execute
      * @param timeoutMs Timeout in milliseconds
@@ -74,57 +71,38 @@ export class LockManager {
         fn: () => Promise<T>,
         timeoutMs: number = this.DEFAULT_TIMEOUT
     ): Promise<T> {
-        // If the resource is not locked, acquire the lock and execute the function
+        // Try to acquire the lock
         if (this.acquire(resourceId, timeoutMs)) {
             try {
-                // Execute the function
-                return await fn();
+                // Execute the function with a timeout
+                const result = await Promise.race([
+                    fn(),
+                    new Promise<never>((_, reject) => {
+                        setTimeout(() => reject(new Error(`Operation timeout for ${resourceId}`)), timeoutMs);
+                    })
+                ]);
+                return result;
+            } catch (error) {
+                // Re-throw the error after cleanup
+                throw error;
             } finally {
                 // Always release the lock
                 this.release(resourceId);
-
-                // Process any pending operations for this resource
-                this.processPendingOperations(resourceId);
             }
         } else {
-            // If the lock couldn't be acquired, queue the operation
-            return new Promise<T>((resolve, reject) => {
-                // Initialize the queue if it doesn't exist
-                if (!this.pendingOperations.has(resourceId)) {
-                    this.pendingOperations.set(resourceId, []);
-                }
+            // If the lock couldn't be acquired, wait and retry with exponential backoff
+            const retryDelay = Math.floor(Math.random() * 100) + 50; // 50-150ms initial delay with jitter
 
-                // Add the operation to the queue
-                this.pendingOperations.get(resourceId)!.push({ fn, resolve, reject });
+            // Wait for the retry delay
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
 
-                console.log(`Operation queued for ${resourceId}, ${this.pendingOperations.get(resourceId)!.length} operations pending`);
-            });
+            // Retry the operation
+            return this.executeWithLock(resourceId, fn, timeoutMs);
         }
     }
 
     /**
-     * Processes any pending operations for a resource
-     * @param resourceId A unique identifier for the resource
-     */
-    private static processPendingOperations(resourceId: string): void {
-        // Check if there are any pending operations
-        if (this.pendingOperations.has(resourceId) && this.pendingOperations.get(resourceId)!.length > 0) {
-            // Get the next operation
-            const nextOperation = this.pendingOperations.get(resourceId)!.shift();
-
-            if (nextOperation) {
-                console.log(`Processing next operation for ${resourceId}, ${this.pendingOperations.get(resourceId)!.length} operations remaining`);
-
-                // Execute the operation with a lock
-                this.executeWithLock(resourceId, nextOperation.fn)
-                    .then(nextOperation.resolve)
-                    .catch(nextOperation.reject);
-            }
-        }
-    }
-
-    /**
-     * Clears all locks, timeouts, and pending operations
+     * Clears all locks and timeouts
      * Should be called during cleanup/disposal
      */
     public static clearAllLocks(): void {
@@ -132,8 +110,5 @@ export class LockManager {
         this.lockTimeouts.forEach(timeout => clearTimeout(timeout));
         this.lockTimeouts.clear();
         this.locks.clear();
-
-        // Clear all pending operations
-        this.pendingOperations.clear();
     }
 }

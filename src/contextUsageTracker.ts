@@ -3,28 +3,9 @@ import { WebviewManager } from './webviewManager';
 import { ResourceManager } from './utils/resourceManager';
 import { handleError } from './utils/errorHandler';
 
-/**
- * Interface for context usage information
- */
-interface ContextUsageInfo {
-    used: number;
-    total: number;
-}
-
-/**
- * Type guard to check if an object is a valid ContextUsageInfo
- */
-function isContextUsageInfo(obj: unknown): obj is ContextUsageInfo {
-    return (
-        typeof obj === 'object' &&
-        obj !== null &&
-        'used' in obj &&
-        'total' in obj &&
-        typeof (obj as any).used === 'number' &&
-        typeof (obj as any).total === 'number'
-    );
-}
-
+// Storage key for persisting token usage
+const STORAGE_KEY = 'codabra-token-usage';
+const DEFAULT_TOTAL_TOKENS = 200000;
 
 /**
  * Manages tracking and updating token usage
@@ -33,10 +14,22 @@ export class ContextUsageTracker {
     // Track the last known token usage
     private _lastKnownTokenUsage = 0;
     private _updateIntervalId?: NodeJS.Timeout;
+    private _storage: vscode.Memento;
 
     constructor(
-        private readonly _webviewManager: WebviewManager
-    ) { }
+        private readonly _webviewManager: WebviewManager,
+        storage?: vscode.Memento
+    ) {
+        // Use provided storage or fallback to a default empty Memento-like object
+        this._storage = storage || {
+            get: <T>(key: string, defaultValue?: T) => defaultValue as T,
+            update: (key: string, value: any) => Promise.resolve(),
+            keys: () => []
+        };
+
+        // Load persisted token usage
+        this._lastKnownTokenUsage = this._storage.get<number>(STORAGE_KEY, 0);
+    }
 
     /**
      * Initializes the context usage tracker
@@ -46,41 +39,39 @@ export class ContextUsageTracker {
         this.updateContextUsage();
 
         // Set up interval to update context usage every 5 seconds
-        // Use ResourceManager to ensure proper cleanup
         this._updateIntervalId = ResourceManager.setInterval(() => this.updateContextUsage(), 5000);
     }
 
     /**
      * Updates the context usage display
      */
-    public updateContextUsage(used?: number, total: number = 200000): void {
+    public updateContextUsage(used?: number, total: number = DEFAULT_TOTAL_TOKENS): void {
         try {
-            // If a specific usage value is provided, use it
-            if (used !== undefined) {
+            // Update token usage if a value is provided
+            if (used !== undefined && this._lastKnownTokenUsage !== used) {
                 this._lastKnownTokenUsage = used;
-            } else {
-                // Otherwise try to get the current context usage from the environment
-                let usedTokens = this._lastKnownTokenUsage; // Use the last known token usage as a starting point
+                this._storage.update(STORAGE_KEY, used);
+            }
+            // Otherwise try to get usage from environment
+            else if (vscode.env.appHost === 'desktop') {
+                const extendedEnv = vscode.env as any;
 
-                // Try to get context usage from VSCode environment if available
-                if (vscode.env.appHost === 'desktop') {
-                    // Safely access the extended environment properties
-                    const extendedEnv = vscode.env as any;
+                if (extendedEnv.contextUsage &&
+                    typeof extendedEnv.contextUsage === 'object' &&
+                    typeof extendedEnv.contextUsage.used === 'number' &&
+                    extendedEnv.contextUsage.used > 0) {
 
-                    // Check if contextUsage exists
-                    if (extendedEnv.contextUsage) {
-                        const contextUsage = extendedEnv.contextUsage;
+                    // Update if value has changed
+                    if (this._lastKnownTokenUsage !== extendedEnv.contextUsage.used) {
+                        this._lastKnownTokenUsage = extendedEnv.contextUsage.used;
+                        this._storage.update(STORAGE_KEY, this._lastKnownTokenUsage);
+                    }
 
-                        // Validate the contextUsage object
-                        if (isContextUsageInfo(contextUsage) && contextUsage.used > 0) {
-                            usedTokens = contextUsage.used;
-                            total = contextUsage.total || 200000;
-                        }
+                    // Use environment total if available
+                    if (typeof extendedEnv.contextUsage.total === 'number') {
+                        total = extendedEnv.contextUsage.total;
                     }
                 }
-
-                // Update the last known token usage
-                this._lastKnownTokenUsage = usedTokens;
             }
 
             // Send context usage update to the webview
@@ -90,15 +81,7 @@ export class ContextUsageTracker {
                 total: total
             });
         } catch (error) {
-            // Use standardized error handling but don't show to user
             handleError(error, 'updating context usage', false);
-
-            // Fallback to the last known token usage if there's an error
-            this._webviewManager.postMessage({
-                command: 'updateContextUsage',
-                used: this._lastKnownTokenUsage,
-                total: 200000
-            });
         }
     }
 
@@ -113,8 +96,6 @@ export class ContextUsageTracker {
      * Disposes of resources
      */
     public dispose(): void {
-        // ResourceManager will handle clearing the interval
-        // This is just an extra safety measure
         if (this._updateIntervalId) {
             clearInterval(this._updateIntervalId);
             this._updateIntervalId = undefined;

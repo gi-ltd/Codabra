@@ -21,17 +21,14 @@ export class EventManager {
     public static debounce(eventId: string, callback: () => void, delay: number = 300): void {
         // Clear any existing timer for this event
         if (this.debounceTimers.has(eventId)) {
-            clearTimeout(this.debounceTimers.get(eventId));
+            clearTimeout(this.debounceTimers.get(eventId)!);
         }
 
-        // Set a new timer
-        const timer = setTimeout(() => {
+        // Set a new timer and store it
+        this.debounceTimers.set(eventId, setTimeout(() => {
             callback();
             this.debounceTimers.delete(eventId);
-        }, delay);
-
-        // Store the timer
-        this.debounceTimers.set(eventId, timer);
+        }, delay));
     }
 
     /**
@@ -49,34 +46,26 @@ export class EventManager {
      * @param value The value to set
      */
     public static setVSCodeContext(key: string, value: any): void {
-        const eventId = `vscode-context-${key}`;
-        this.debounce(eventId, () => {
+        this.debounce(`vscode-context-${key}`, () => {
             vscode.commands.executeCommand('setContext', key, value);
         }, 50);
     }
 
     /**
-     * Posts a message to a webview with debouncing for specific command types
+     * Posts a message to a webview with optional debouncing
      * @param webview The webview to post the message to
      * @param message The message to post
-     * @param debounceDelay Optional debounce delay (set to 0 to disable debouncing)
      */
-    public static postMessageToWebview(
-        webview: vscode.Webview | undefined,
-        message: any,
-        debounceDelay: number = 0
-    ): void {
-        if (!webview) {
-            return;
-        }
+    public static postMessageToWebview(webview: vscode.Webview | undefined, message: any): void {
+        if (!webview) return;
 
-        if (debounceDelay > 0 && message.command && this.DEBOUNCE_COMMANDS.includes(message.command)) {
-            const eventId = `webview-message-${message.command}`;
-            this.debounce(eventId, () => {
+        // Automatically debounce specific commands
+        if (message.command && this.DEBOUNCE_COMMANDS.includes(message.command)) {
+            this.debounce(`webview-message-${message.command}`, () => {
                 webview.postMessage(message);
-            }, debounceDelay);
+            }, 100);
         } else {
-            // For other commands or when debouncing is disabled, post immediately
+            // For other commands, post immediately
             webview.postMessage(message);
         }
     }

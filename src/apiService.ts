@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import Anthropic from '@anthropic-ai/sdk';
 import { HistoryPanel } from './historyPanel';
-import { handleError, ErrorType } from './utils/errorHandler';
+import { handleError } from './utils/errorHandler';
 
 export interface ScriptAttachment {
   content: string;
@@ -26,17 +26,15 @@ export interface Chat {
 }
 
 export class APIService {
-
   private anthropic: Anthropic | undefined;
   private storage: vscode.Memento;
   private pastChatsProvider: HistoryPanel;
   private _onDidChangeChats = new vscode.EventEmitter<void>();
   public readonly onDidChangeChats = this._onDidChangeChats.event;
 
-  // Cache for token counts to avoid unnecessary API calls
-  private tokenCountCache: Map<string, number> = new Map();
-  // Maximum number of entries in the token count cache
-  private readonly MAX_CACHE_SIZE = 100;
+  // Simple cache for token counts
+  private tokenCountCache = new Map<string, number>();
+  private readonly CACHE_EXPIRATION_MS = 10 * 60 * 1000; // 10 minutes
 
   // Map to track ongoing requests by chatId
   private activeRequests: Map<string, AbortController> = new Map();
@@ -114,7 +112,7 @@ export class APIService {
       timestamp: Date.now(),
       context: context
     };
-    
+
     // Handle script attachments
     if (scripts) {
       if (Array.isArray(scripts)) {
@@ -160,7 +158,7 @@ export class APIService {
         messages: updatedChat.messages.map(msg => {
           // Create the base message
           const message: any = { role: msg.role, content: msg.content };
-          
+
           // Handle script attachments for user messages
           if (msg.role === 'user') {
             // Handle multiple scripts if available
@@ -176,7 +174,7 @@ export class APIService {
               message.content += `\n\n**Attached Script (${msg.script.language}):**\n\`\`\`${msg.script.language}\n${msg.script.content}\n\`\`\``;
             }
           }
-          
+
           return message;
         }),
         temperature: 1,
@@ -240,7 +238,8 @@ export class APIService {
               };
 
               // Store the temporary chat in memory so it can be retrieved by getChat
-              const chats = await this.getAllChats();
+              // Get all chats (unsorted) directly from storage
+              const chats = this.storage.get<Chat[]>('codabra-chats', []);
               const index = chats.findIndex(c => c.id === chatId);
               if (index !== -1) {
                 chats[index] = tempChat;
@@ -323,7 +322,6 @@ export class APIService {
   }
 
   public async createChat(): Promise<Chat> {
-
     const chat: Chat = {
       id: this.generateUniqueId(),
       title: 'New Chat',
@@ -334,22 +332,23 @@ export class APIService {
 
     await this.updateChat(chat);
     return chat;
-
   }
 
   public async getChat(chatId: string): Promise<Chat | undefined> {
-    const chats = await this.getAllChats();
+    // Get all chats (unsorted) directly from storage
+    const chats = this.storage.get<Chat[]>('codabra-chats', []);
     return chats.find(chat => chat.id === chatId);
   }
 
   public async getAllChats(): Promise<Chat[]> {
     const chats = this.storage.get<Chat[]>('codabra-chats', []);
-    return chats;
+    // Sort chats by updatedAt (most recent first)
+    return [...chats].sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   public async updateChat(chat: Chat): Promise<void> {
-
-    const chats = await this.getAllChats();
+    // Get all chats (unsorted) directly from storage
+    const chats = this.storage.get<Chat[]>('codabra-chats', []);
     const index = chats.findIndex(c => c.id === chat.id);
 
     if (index !== -1)
@@ -357,28 +356,30 @@ export class APIService {
     else
       chats.push(chat);
 
+    // Save the updated chats to storage
     await this.storage.update('codabra-chats', chats);
     this._onDidChangeChats.fire();
     this.pastChatsProvider.refresh();
-
   }
 
   public async deleteChat(chatId: string): Promise<void> {
-    const chats = await this.getAllChats();
+    // Get all chats (unsorted) directly from storage
+    const chats = this.storage.get<Chat[]>('codabra-chats', []);
+    // Filter out the chat to delete
     await this.storage.update('codabra-chats', chats.filter(chat => chat.id !== chatId));
     this._onDidChangeChats.fire();
     this.pastChatsProvider.refresh();
   }
 
   public async chatExists(chatId: string): Promise<boolean> {
-    const chats = await this.getAllChats();
+    // Get all chats (unsorted) directly from storage
+    const chats = this.storage.get<Chat[]>('codabra-chats', []);
     return chats.some(chat => chat.id === chatId);
   }
 
   generateUniqueId = (): string => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
   generateChatTitle(firstMessage: string): string {
-
     // Generate a title based on the first message
     const maxLength = 30;
     let title = firstMessage.trim().substring(0, maxLength);
@@ -387,7 +388,6 @@ export class APIService {
       title += '...';
 
     return title;
-
   }
 
   /**
@@ -406,7 +406,12 @@ export class APIService {
       return undefined;
     }
 
-    // Generate a cache key based on chat content
+    // If there are no messages, return 0 tokens
+    if (!chat.messages || chat.messages.length === 0) {
+      return 0;
+    }
+
+    // Generate a simple cache key
     const cacheKey = `${chatId}-${chat.updatedAt}`;
 
     // Check if we have a cached result
@@ -414,19 +419,35 @@ export class APIService {
       return this.tokenCountCache.get(cacheKey);
     }
 
+    // Clean up expired cache entries
+    this.cleanupExpiredCache();
+
     try {
+      // Prepare messages for token counting
+      const messages = chat.messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // Ensure we have at least one message
+      if (messages.length === 0) {
+        // If somehow we have no messages after mapping, add a dummy message
+        messages.push({ role: 'user', content: ' ' });
+      }
+
+      // Get system prompt
+      const systemPrompt = vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || '';
+
       // Prepare the request for token counting
       const response = await this.anthropic.messages.countTokens({
         model: 'claude-3-7-sonnet-latest',
-        messages: chat.messages.map(msg => ({ role: msg.role, content: msg.content })),
-        system: vscode.workspace.getConfiguration('codabra').get<string>('systemPrompt') || ''
+        messages: messages,
+        system: systemPrompt
       });
-
-      // Manage cache size before adding new entry
-      this.manageTokenCacheSize();
 
       // Cache the result
       this.tokenCountCache.set(cacheKey, response.input_tokens);
+
       return response.input_tokens;
     } catch (error: unknown) {
       // Use standardized error handling but don't show to user for token counting
@@ -447,17 +468,34 @@ export class APIService {
   }
 
   /**
-   * Manages the token count cache size to prevent memory leaks
-   * Removes oldest entries when the cache exceeds MAX_CACHE_SIZE
+   * Cleans up expired cache entries
    */
-  private manageTokenCacheSize(): void {
-    if (this.tokenCountCache.size >= this.MAX_CACHE_SIZE) {
-      // Get the oldest entries (first entries in the map)
-      const entriesToRemove = this.tokenCountCache.size - this.MAX_CACHE_SIZE + 1;
-      const keys = Array.from(this.tokenCountCache.keys()).slice(0, entriesToRemove);
+  private cleanupExpiredCache(): void {
+    const now = Date.now();
+    const expirationThreshold = now - this.CACHE_EXPIRATION_MS;
 
-      // Remove the oldest entries
-      keys.forEach(key => this.tokenCountCache.delete(key));
+    // Remove expired entries
+    for (const [key, _] of this.tokenCountCache.entries()) {
+      const parts = key.split('-');
+      if (parts.length >= 2) {
+        const timestamp = parseInt(parts[1], 10);
+        if (!isNaN(timestamp) && timestamp < expirationThreshold) {
+          this.tokenCountCache.delete(key);
+        }
+      }
+    }
+
+    // Limit cache size to 100 entries
+    if (this.tokenCountCache.size > 100) {
+      const keysToDelete = Array.from(this.tokenCountCache.keys())
+        .sort((a, b) => {
+          const timestampA = parseInt(a.split('-')[1], 10) || 0;
+          const timestampB = parseInt(b.split('-')[1], 10) || 0;
+          return timestampA - timestampB;
+        })
+        .slice(0, this.tokenCountCache.size - 100);
+
+      keysToDelete.forEach(key => this.tokenCountCache.delete(key));
     }
   }
 }

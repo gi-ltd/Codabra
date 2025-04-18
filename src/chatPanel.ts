@@ -148,12 +148,12 @@ export class ChatPanel implements vscode.WebviewViewProvider {
   private sendActiveEditorContent(): void {
     // Try to get the active text editor
     const editor = vscode.window.activeTextEditor;
-    
+
     if (editor && editor.document) {
       const document = editor.document;
       const content = document.getText();
       const language = document.languageId;
-      
+
       this._webviewManager.postMessage({
         command: 'activeEditorContent',
         content: content,
@@ -168,7 +168,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         const document = firstEditor.document;
         const content = document.getText();
         const language = document.languageId;
-        
+
         this._webviewManager.postMessage({
           command: 'activeEditorContent',
           content: content,
@@ -177,7 +177,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
       } else {
         // If still no editor is found, show a more helpful message
         vscode.window.showInformationMessage('No active editor found. Please open a file to attach its content.');
-        
+
         // Optionally, we could also add a command to open a file picker
         vscode.commands.executeCommand('workbench.action.files.openFile')
           .then(() => {
@@ -187,7 +187,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
       }
     }
   }
-  
+
   /**
    * Opens a file picker and sends the selected file content to the webview
    */
@@ -201,14 +201,14 @@ export class ChatPanel implements vscode.WebviewViewProvider {
           'All Files': ['*']
         }
       });
-      
+
       if (fileUris && fileUris.length > 0) {
         // Read the selected file
         const fileUri = fileUris[0];
         const document = await vscode.workspace.openTextDocument(fileUri);
         const content = document.getText();
         const language = document.languageId;
-        
+
         // Send the file content to the webview
         this._webviewManager.postMessage({
           command: 'activeEditorContent',
@@ -218,13 +218,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
       }
     } catch (error) {
       vscode.window.showErrorMessage(`Error selecting file: ${error}`);
-      
+
       // Fallback to manual input
       const manualInput = await vscode.window.showInputBox({
         prompt: 'No file selected. You can manually enter a language for your code:',
         placeHolder: 'javascript, python, typescript, etc.'
       });
-      
+
       if (manualInput) {
         // Show input box for code content
         const codeContent = await vscode.window.showInputBox({
@@ -232,7 +232,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
           placeHolder: 'Paste or type your code here'
           // Note: VSCode's standard input box doesn't support multiline input
         });
-        
+
         if (codeContent) {
           this._webviewManager.postMessage({
             command: 'activeEditorContent',

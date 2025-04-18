@@ -142,11 +142,41 @@
     
     // Function to add a script attachment
     function addScriptAttachment(script, language) {
-        // Add to the scripts array
-        attachedScripts.push({ content: script, language: language });
+        // Validate inputs
+        if (!script) {
+            console.warn('Attempted to add empty script');
+            return;
+        }
+        
+        // Normalize language
+        const normalizedLanguage = language || 'text';
+        
+        // Limit script size to prevent performance issues (100KB limit)
+        const MAX_SCRIPT_SIZE = 100 * 1024;
+        let scriptContent = script;
+        if (script.length > MAX_SCRIPT_SIZE) {
+            scriptContent = script.substring(0, MAX_SCRIPT_SIZE) + 
+                '\n\n// Note: Script was truncated due to size limitations';
+            console.warn(`Script truncated from ${script.length} to ${MAX_SCRIPT_SIZE} characters`);
+        }
+        
+        // Add to the scripts array with a unique ID
+        const scriptId = Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+        attachedScripts.push({ 
+            id: scriptId,
+            content: scriptContent, 
+            language: normalizedLanguage 
+        });
+        
+        // Limit the number of scripts to prevent performance issues
+        const MAX_SCRIPTS = 5;
+        if (attachedScripts.length > MAX_SCRIPTS) {
+            attachedScripts.shift(); // Remove the oldest script
+            console.warn(`Maximum script limit (${MAX_SCRIPTS}) reached, removed oldest script`);
+        }
         
         // Create the script element
-        const scriptElement = createScriptElement(script, language, attachedScripts.length - 1);
+        const scriptElement = createScriptElement(scriptContent, normalizedLanguage, attachedScripts.length - 1);
         
         // Add to the container
         scriptsContainer.appendChild(scriptElement);
@@ -155,6 +185,9 @@
         if (attachedScripts.length === 1) {
             addAnotherScriptButton();
         }
+        
+        // Return the script ID for reference
+        return scriptId;
     }
     
     // Function to add the "Add Another Script" button
@@ -162,6 +195,12 @@
         // Check if button already exists
         if (document.getElementById('add-another-script-button')) {
             return;
+        }
+        
+        // Check if we've reached the maximum number of scripts
+        const MAX_SCRIPTS = 5;
+        if (attachedScripts.length >= MAX_SCRIPTS) {
+            return; // Don't add the button if we've reached the limit
         }
         
         const addButton = document.createElement('button');
@@ -187,27 +226,52 @@
     
     // Function to remove a script attachment
     function removeScriptAttachment(index) {
-        // Remove from the array
-        attachedScripts.splice(index, 1);
+        // Validate index
+        if (index < 0 || index >= attachedScripts.length) {
+            console.warn(`Invalid script index: ${index}`);
+            return;
+        }
         
-        // Rebuild the UI
-        updateScriptAttachmentsUI();
+        try {
+            // Remove from the array
+            attachedScripts.splice(index, 1);
+            
+            // Rebuild the UI
+            updateScriptAttachmentsUI();
+        } catch (error) {
+            console.error('Error removing script attachment:', error);
+            
+            // Fallback: clear all scripts and rebuild from scratch
+            clearAllScriptAttachments();
+        }
     }
     
     // Function to update the script attachments UI
     function updateScriptAttachmentsUI() {
-        // Clear the container
-        scriptsContainer.innerHTML = '';
-        
-        // Add each script
-        attachedScripts.forEach((script, index) => {
-            const scriptElement = createScriptElement(script.content, script.language, index);
-            scriptsContainer.appendChild(scriptElement);
-        });
-        
-        // Add the "Add Another Script" button if there are scripts
-        if (attachedScripts.length > 0) {
-            addAnotherScriptButton();
+        try {
+            // Clear the container
+            scriptsContainer.innerHTML = '';
+            
+            // Add each script
+            attachedScripts.forEach((script, index) => {
+                if (!script || !script.content) {
+                    console.warn(`Invalid script at index ${index}, skipping`);
+                    return;
+                }
+                
+                const scriptElement = createScriptElement(script.content, script.language || 'text', index);
+                scriptsContainer.appendChild(scriptElement);
+            });
+            
+            // Add the "Add Another Script" button if there are scripts
+            if (attachedScripts.length > 0) {
+                addAnotherScriptButton();
+            }
+        } catch (error) {
+            console.error('Error updating script attachments UI:', error);
+            
+            // Fallback: clear everything
+            scriptsContainer.innerHTML = '';
         }
     }
     
@@ -304,33 +368,86 @@
     
     // Helper function to add a script to a message
     function addScriptToMessage(messageElement, script, index) {
-        const scriptElement = document.createElement('div');
-        scriptElement.className = 'message-script-attachment';
-        
-        const scriptHeader = document.createElement('div');
-        scriptHeader.className = 'message-script-header';
-        scriptHeader.textContent = Array.isArray(attachedScripts) && attachedScripts.length > 1 ? 
-            `Attached Script ${index + 1}: ${script.language}` : 
-            `Attached Script (${script.language}):`;
-        
-        const scriptContent = document.createElement('pre');
-        scriptContent.className = 'message-script-content';
-        
-        const codeElement = document.createElement('code');
-        if (script.language && hljs.getLanguage(script.language)) {
-            codeElement.className = `language-${script.language}`;
+        try {
+            // Validate script object
+            if (!script || typeof script !== 'object') {
+                console.warn('Invalid script object:', script);
+                return;
+            }
+            
+            // Ensure script has content
+            if (!script.content) {
+                console.warn('Script missing content:', script);
+                return;
+            }
+            
+            // Normalize language
+            const language = script.language || 'text';
+            
+            // Create script element
+            const scriptElement = document.createElement('div');
+            scriptElement.className = 'message-script-attachment';
+            
+            // Create header
+            const scriptHeader = document.createElement('div');
+            scriptHeader.className = 'message-script-header';
+            
+            // Determine header text based on context
+            let headerText;
+            if (Array.isArray(script.scripts) && script.scripts.length > 1) {
+                headerText = `Attached Script ${index + 1}: ${language}`;
+            } else {
+                headerText = `Attached Script (${language}):`;
+            }
+            
+            scriptHeader.textContent = headerText;
+            
+            // Create content container
+            const scriptContent = document.createElement('pre');
+            scriptContent.className = 'message-script-content';
+            
+            // Create code element with syntax highlighting
+            const codeElement = document.createElement('code');
+            
+            // Apply language class if available in highlight.js
+            if (language && hljs.getLanguage(language)) {
+                codeElement.className = `language-${language}`;
+            } else {
+                // Fallback to text or auto-detection
+                codeElement.className = 'language-text';
+            }
+            
+            // Limit content size for performance
+            const MAX_DISPLAY_SIZE = 50 * 1024; // 50KB
+            let displayContent = script.content;
+            
+            if (displayContent.length > MAX_DISPLAY_SIZE) {
+                displayContent = displayContent.substring(0, MAX_DISPLAY_SIZE) + 
+                    '\n\n// Note: Script display was truncated due to size limitations';
+            }
+            
+            // Set content and apply highlighting
+            codeElement.textContent = displayContent;
+            
+            try {
+                hljs.highlightElement(codeElement);
+            } catch (highlightError) {
+                console.warn('Error highlighting code:', highlightError);
+                // Fallback to plain text if highlighting fails
+                codeElement.className = '';
+            }
+            
+            // Assemble the elements
+            scriptContent.appendChild(codeElement);
+            scriptElement.appendChild(scriptHeader);
+            scriptElement.appendChild(scriptContent);
+            
+            // Add the script element after the content element
+            messageElement.appendChild(scriptElement);
+        } catch (error) {
+            console.error('Error adding script to message:', error);
+            // Don't add anything if there's an error
         }
-        codeElement.textContent = script.content;
-        
-        // Apply syntax highlighting
-        hljs.highlightElement(codeElement);
-        
-        scriptContent.appendChild(codeElement);
-        scriptElement.appendChild(scriptHeader);
-        scriptElement.appendChild(scriptContent);
-        
-        // Add the script element after the content element
-        messageElement.appendChild(scriptElement);
     }
 
     // Function to update streaming content with markdown rendering
