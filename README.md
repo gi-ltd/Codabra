@@ -1,6 +1,6 @@
-# Codabra (Preview)
+# Codabra
 
-**Codabra** is a simple, clean AI coding assistant for Visual Studio Code that integrates with Anthropic's Claude model to provide intelligent coding assistance directly in your editor. This extension is currently in preview.
+**Codabra** is a simple, clean AI coding assistant for Visual Studio Code that integrates with Anthropic's Claude model to provide intelligent coding assistance directly in your editor.
 
 ## Features
 
@@ -8,6 +8,8 @@
 - **Clean Chat Interface**: Interact with Claude through a simple, intuitive chat panel in the VSCode sidebar
 - **Script Attachments**: Attach code from your active editor to your messages for more targeted assistance
 - **Markdown Support**: View responses with proper formatting, syntax highlighting, and code blocks
+- **Code Block Copy Button**: Easily copy code from any code block with a single click
+- **VSCode-Styled Code Blocks**: Code blocks match VSCode's native appearance for better readability
 - **Context-Aware**: Automatically includes relevant editor context with your queries
 - **Extended Thinking Mode**: Enable Claude's extended thinking capabilities for more complex problems
 - **Customizable System Prompt**: Configure the AI's behavior to suit your specific needs
@@ -30,6 +32,20 @@
 
 2. Click the "+" icon to start a new chat, or use the keyboard shortcut `Ctrl+Shift+Z` (`Cmd+Shift+Z` on Mac)
 3. Type your question or request in the input field and press Enter
+
+### Using the Copy Code Feature
+
+When viewing code blocks in Claude's responses or in script attachments:
+
+1. Hover over any code block to reveal the copy button in the top-right corner
+2. Click the button to copy the entire code block to your clipboard
+3. Visual feedback will indicate whether the copy was successful
+4. The copied code can then be pasted directly into your editor or any other application
+
+This feature works with all types of code blocks:
+- Code blocks in Claude's markdown responses
+- Script attachments in messages
+- Code blocks in streaming responses while Claude is generating content
 
 ### Attaching Scripts
 

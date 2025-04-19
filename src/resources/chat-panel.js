@@ -119,6 +119,9 @@
             // Clear and append the highlighted code
             scriptContent.innerHTML = '';
             scriptContent.appendChild(codeElement);
+
+            // Add copy button to the script content
+            addCopyButtonToCodeBlock(scriptContent, codeElement);
         }
 
         scriptContainer.appendChild(scriptHeader);
@@ -324,7 +327,16 @@
             contentElement.className = 'message-content markdown-content';
             contentElement.innerHTML = marked.parse(normalizedContent);
 
-            contentElement.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block)); // Apply syntax highlighting to code blocks
+            // Apply syntax highlighting to code blocks
+            contentElement.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+
+                // Add copy button to each code block
+                const pre = block.parentElement;
+                if (pre && pre.tagName === 'PRE') {
+                    addCopyButtonToCodeBlock(pre, block);
+                }
+            });
 
             messageElement.appendChild(contentElement);
         } else { // For user messages, just use text
@@ -426,6 +438,10 @@
 
             // Assemble the elements
             scriptContent.appendChild(codeElement);
+
+            // Add copy button to script content
+            addCopyButtonToCodeBlock(scriptContent, codeElement);
+
             scriptElement.appendChild(scriptHeader);
             scriptElement.appendChild(scriptContent);
 
@@ -445,9 +461,20 @@
             const normalizedContent = content.replace(/\n{3,}/g, '\n\n');
             streamingContent.innerHTML = marked.parse(normalizedContent);
 
-            // Apply syntax highlighting to code blocks
+            // Apply syntax highlighting to code blocks and add copy buttons
             streamingContent.querySelectorAll('pre code').forEach((block) => {
                 hljs.highlightElement(block);
+
+                // Add copy button to each code block
+                const pre = block.parentElement;
+                if (pre && pre.tagName === 'PRE') {
+                    // Remove any existing copy buttons first to avoid duplicates
+                    const existingButtons = pre.querySelectorAll('.copy-code-button');
+                    existingButtons.forEach(button => button.remove());
+
+                    // Add the copy button
+                    addCopyButtonToCodeBlock(pre, block);
+                }
             });
 
             // Scroll to bottom
@@ -636,6 +663,69 @@
         // Call the original addMessage function
         originalAddMessage(content, role, script);
     };
+
+    // Function to add a copy button to a code block
+    function addCopyButtonToCodeBlock(preElement, codeElement) {
+        // Create the copy button
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-code-button';
+        copyButton.title = 'Copy code';
+        copyButton.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+        `;
+
+        // Add click event to copy the code
+        copyButton.addEventListener('click', function () {
+            // Get the text content of the code element
+            const codeText = codeElement.textContent;
+
+            // Use the clipboard API to copy the text
+            navigator.clipboard.writeText(codeText)
+                .then(() => {
+                    // Visual feedback that copy was successful
+                    const originalInnerHTML = copyButton.innerHTML;
+                    copyButton.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    `;
+                    copyButton.style.backgroundColor = 'var(--vscode-button-background)';
+
+                    // Reset after a short delay
+                    setTimeout(() => {
+                        copyButton.innerHTML = originalInnerHTML;
+                        copyButton.style.backgroundColor = '';
+                    }, 1500);
+                })
+                .catch(err => {
+                    console.error('Failed to copy code: ', err);
+
+                    // Visual feedback that copy failed
+                    copyButton.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    `;
+                    copyButton.style.backgroundColor = 'var(--vscode-editorError-foreground)';
+
+                    // Reset after a short delay
+                    setTimeout(() => {
+                        copyButton.innerHTML = originalInnerHTML;
+                        copyButton.style.backgroundColor = '';
+                    }, 1500);
+                });
+        });
+
+        // Add the button to the pre element
+        preElement.appendChild(copyButton);
+    }
 
     // Function to update the context usage bar
     function updateContextUsage(used, total) {

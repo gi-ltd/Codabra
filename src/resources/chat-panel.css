@@ -93,12 +93,13 @@ body {
 }
 
 .markdown-content pre {
-    background-color: #1e1e1e;
+    background-color: var(--vscode-editor-background);
     padding: 1em;
-    border-radius: 5px;
+    border-radius: 3px;
     overflow-x: auto;
     margin: 0.5em 0;
-    border: 1px solid #444;
+    border: 1px solid var(--vscode-panel-border);
+    position: relative;
 }
 
 .markdown-content pre code {
@@ -106,7 +107,39 @@ body {
     padding: 0;
     border-radius: 0;
     font-size: 1em;
-    color: #d4d4d4;
+    color: var(--vscode-editor-foreground);
+    font-family: var(--vscode-editor-font-family);
+}
+
+.copy-code-button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    border-radius: 3px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.markdown-content pre:hover .copy-code-button {
+    opacity: 1;
+}
+
+.copy-code-button:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.copy-code-button svg {
+    width: 14px;
+    height: 14px;
 }
 
 /* Syntax highlighting colors for code blocks */
@@ -222,9 +255,15 @@ body {
     padding: 10px;
     max-height: 200px;
     overflow-y: auto;
-    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    background-color: var(--vscode-editor-background);
     font-family: var(--vscode-editor-font-family);
     font-size: 0.9em;
+    position: relative;
+    border-radius: 0 0 3px 3px;
+}
+
+.message-script-content:hover .copy-code-button {
+    opacity: 1;
 }
 
 .input-container {
@@ -283,6 +322,13 @@ body {
     font-family: var(--vscode-editor-font-family);
     font-size: 0.9em;
     white-space: pre;
+    background-color: var(--vscode-editor-background);
+    position: relative;
+    border-radius: 0 0 3px 3px;
+}
+
+.script-content:hover .copy-code-button {
+    opacity: 1;
 }
 
 .remove-script-button {

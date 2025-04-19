@@ -2,6 +2,17 @@
 
 All notable changes to the "Codabra" extension will be documented in this file.
 
+## [1.2.0] - 2025-04-19
+
+### Added
+- Code blocks now have a copy button that appears on hover, allowing users to easily copy code to clipboard
+- Added visual feedback when copying code (success/failure indicators)
+
+### Changed
+- Improved code block styling to match VSCode's native appearance
+- Enhanced code block readability with better colors and formatting
+- Applied consistent styling across all types of code blocks (markdown, script attachments, streaming content)
+
 ## [1.1.0] - 2025-04-19
 
 ### Changed
