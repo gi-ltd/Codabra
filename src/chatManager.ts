@@ -116,8 +116,8 @@ export class ChatManager {
         // Reset context usage when creating a new chat
         this.updateContextUsage(0);
 
-        // Focus the chat view
-        vscode.commands.executeCommand('codabra-view.focus');
+        // No need to focus the chat view here as it's already shown by createOrShowPanel
+        // The command 'codabra-view.focus' is not registered and causes an error
       } catch (error) {
         handleError(error, 'creating new chat');
       } finally {

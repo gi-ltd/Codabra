@@ -2,6 +2,18 @@
 
 All notable changes to the "Codabra" extension will be documented in this file.
 
+## [1.1.0] - 2025-04-19
+
+### Changed
+- Removed preview status - Codabra is now considered stable
+- Fixed dependency issues with @anthropic-ai/sdk and its dependencies that were causing activation failures
+- Improved extension packaging to include all dependencies for maximum compatibility
+
+## [1.0.8] - 2025-04-19
+
+### Changed
+- Bug fixes and performance improvements
+
 ## [1.0.7] - 2025-04-18
 
 ### Changed

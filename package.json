@@ -1,12 +1,12 @@
 {
   "name": "codabra",
-  "displayName": "Codabra (Preview)",
+  "displayName": "Codabra",
   "description": "A simple, clean AI coding assistant",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "publisher": "GeneralIntelligenceLTD",
   "license": "MIT",
   "icon": "icon.png",
-  "preview": true,
+  "preview": false,
   "repository": {
     "type": "git",
     "url": "https://github.com/gi-ltd/Codabra.git"
@@ -119,8 +119,11 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@vscode/vsce": "^3.3.2",
+    "agentkeepalive": "^4.6.0",
+    "formdata-node": "^6.0.3",
     "highlight.js": "^11.8.0",
     "jsdom": "^24.0.0",
-    "marked": "^9.1.0"
+    "marked": "^9.1.0",
+    "node-fetch": "^3.3.2"
   }
 }
